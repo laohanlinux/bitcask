@@ -1,28 +1,45 @@
 package bitcask
 
-import (
-	"os"
-	"sync"
-)
+import "sync"
 
 // KeyDirs for HashMap
-var KeyDirs map[*os.File]KeyDir
 var keyDirsLock *sync.Mutex
 
+var keyDirs *KeyDirs
+var keyDirsOnce sync.Once
+
 func init() {
-	KeyDirs = make(map[*os.File]KeyDir)
 	keyDirsLock = &sync.Mutex{}
 }
 
-// KeyDir ...
-type KeyDir struct {
-	//keyDirs map[*BFile]*KeyDir
+// KeyDirs ...
+type KeyDirs struct {
+	entrys map[string]*entry
 }
 
 // NewKeyDir return a KeyDir Obj
-func NewKeyDir(fp *os.File, timeoutSecs int) {
+func NewKeyDir(dirName string, timeoutSecs int) *KeyDirs {
 	//filepath.Abs(fp.Name())
 	keyDirsLock.Lock()
 	defer keyDirsLock.Unlock()
 
+	keyDirsOnce.Do(func() {
+		if keyDirs == nil {
+			keyDirs = &KeyDirs{}
+		}
+	})
+	return keyDirs
+}
+
+func (keyDirs *KeyDirs) put(key string, e *entry) {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+
+	old, ok := keyDirs.entrys[key]
+	if !ok || e.isNewerThan(old) {
+		keyDirs.entrys[key] = e
+		return
+	}
+
+	keyDirs.entrys[key] = old
 }
