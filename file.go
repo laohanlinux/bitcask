@@ -11,6 +11,7 @@ const (
 
 const (
 	// 4 + 4 + 2 + 4
+	// {}
 	HeaderSize = 14
 	// 4 + 2 + 4 + 8 = 18 byte
 	// {timeStamp:keySize:valueOffset:key}
@@ -25,6 +26,7 @@ type BFile struct {
 	writeOffset int
 }
 
+//
 func newBFile() *BFile {
 	return &BFile{}
 }

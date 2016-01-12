@@ -31,6 +31,7 @@ func NewKeyDir(dirName string, timeoutSecs int) *KeyDirs {
 	return keyDirs
 }
 
+// put a key with value into bitcask
 func (keyDirs *KeyDirs) put(key string, e *entry) {
 	keyDirsLock.Lock()
 	defer keyDirsLock.Unlock()

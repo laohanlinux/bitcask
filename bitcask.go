@@ -130,7 +130,8 @@ func (bc *BitCask) parseHint(hintName string) {
 			offset:    entryOffset,
 			timeStamp: int32(timeStamp),
 		}
-
+		// put entry into keyDirs
+		keyDirs.put(key, e)
 	}
 
 }

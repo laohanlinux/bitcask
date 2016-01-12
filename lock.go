@@ -33,6 +33,7 @@ type Lock struct {
 	Fp          *os.File
 }
 
+// return readable file data director list 
 func readActiveFile(Stale int, fileName string) *os.File {
 	fp, err := lockFile(fileName)
 	if err != nil {
@@ -64,5 +65,5 @@ func (l *Lock) writeData(b []byte) {
 }
 
 func scanKeyFiles([]*os.File, keyDir *KeyDir){
-	
+
 }
