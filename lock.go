@@ -3,7 +3,6 @@ package bitcask
 import (
 	"io/ioutil"
 	"os"
-	"strconv"
 )
 
 const (
@@ -33,18 +32,18 @@ type Lock struct {
 	Fp          *os.File
 }
 
-// return readable file data director list 
-func readActiveFile(Stale int, fileName string) *os.File {
-	fp, err := lockFile(fileName)
-	if err != nil {
-		panic(err)
-	}
-
-	//获取文件锁，如果该文件已被锁，则失败
-	lock := lockAcquire(fileName, false)
-	// 获取锁住的内容
-	lock.writeData([]byte(strconv.Itoa(os.Getgid())))
-}
+// // return readable file data director list
+// func readActiveFile(Stale int, fileName string) *os.File {
+// 	fp, err := lockFile(fileName)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+//
+// 	//获取文件锁，如果该文件已被锁，则失败
+// 	lock := lockAcquire(fileName, false)
+// 	// 获取锁住的内容
+// 	lock.writeData([]byte(strconv.Itoa(os.Getgid())))
+// }
 
 // 返回文件的内容
 func (l *Lock) readLockData() string {
@@ -62,8 +61,4 @@ func (l *Lock) writeData(b []byte) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func scanKeyFiles([]*os.File, keyDir *KeyDir){
-
 }

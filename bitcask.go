@@ -1,10 +1,15 @@
 package bitcask
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+)
+
+var (
+	NotFoundErr = fmt.Errorf("Not Found.")
 )
 
 // Open ...
@@ -37,19 +42,58 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 	//　获取可读文件
 	files, _ := b.readableFiles()
 	// 检索可读文件
-
-	return nil, nil
+	b.scanKeyFiles(files)
+	return b, nil
 }
 
 // BitCask ...
 type BitCask struct {
 	//	DirName     string
-	MaxFileSize int
+	MaxFileSize int64
 	Opts        *Options
-	ActiveFile  *os.File
+	ActiveFile  *BFiles
 	lockFile    *os.File
 	keyDirs     *KeyDirs
 	dirFile     *os.File
+	writeFile   *BFile
+}
+
+// Close ...
+func (bc *BitCask) Close() {
+
+}
+
+// Put ...
+func (bc *BitCask) Put(key []byte, value []byte) {
+	if bc.writeFile == nil {
+		panic("read only")
+	}
+	switch bc.writeFile.checkWrite(key, value, bc.MaxFileSize) {
+	case Wrap:
+		e, err := bc.writeFile.writeDatat(key, value)
+		if err != nil {
+			panic(err)
+		}
+		// must to put key/value into keyDirs(HashMap)
+		keyDirs.put(string(key), &e)
+	case Fresh:
+		// time to start our first write file
+
+	case Ok:
+	}
+}
+
+// Get ...
+func (bc *BitCask) Get(key []byte) ([]byte, error) {
+	e := keyDirs.get(string(key))
+	if e == nil {
+		return nil, NotFoundErr
+	}
+
+	// get the value from data file
+	fileID := e.fileID
+	entryPos := e.offset
+
 }
 
 // return readable file: xxxx.data, yyyyy.data
@@ -80,13 +124,26 @@ func (bc *BitCask) listDataFiles() ([]string, error) {
 	return bc.dirFile.Readdirnames(-1)
 }
 
-func (bc *BitCask) scanKeyFiles(files []*os.File, keyDir *KeyDir) {
+//
+func (bc *BitCask) scanKeyFiles(files []*os.File) {
 	for _, file := range files {
 		fileName := file.Name()
 		hintName := fileName[0:strings.Index(fileName, "data")] + ".hint"
 		// 检索ｈｉｎｔ文件
-
+		bc.parseHint(hintName)
 	}
+}
+
+func (bc *BitCask) getFileState(fileID int32) *BFile {
+	bf := bc.ActiveFile.get(fileID)
+	if bf != nil {
+		// open a new bfile
+		return bf
+	}
+
+	bf = openBFile(bc.dirFile.Name(), int(fileID))
+	bc.ActiveFile.put(bf, fileID)
+	return bf
 }
 
 func (bc *BitCask) parseHint(hintName string) {
@@ -98,7 +155,6 @@ func (bc *BitCask) parseHint(hintName string) {
 
 	b := make([]byte, HintHeaderSize, HintHeaderSize+8)
 	offset := int64(0)
-
 	fileID, _ := strconv.ParseInt(hintName[:strings.Index(hintName, ".hint")], 10, 32)
 
 	for {
@@ -115,7 +171,7 @@ func (bc *BitCask) parseHint(hintName string) {
 		if n != HeaderSize {
 			panic(n)
 		}
-		// 4 + 2 + 4 + 8
+		// 4 + 2 + 4 + 4
 		timeStamp, _ := strconv.Atoi(string(b[0:4]))
 		keyLen, _ := strconv.Atoi(string(b[4:6]))
 		entryLen, _ := strconv.Atoi(string(b[6:10]))
@@ -133,5 +189,4 @@ func (bc *BitCask) parseHint(hintName string) {
 		// put entry into keyDirs
 		keyDirs.put(key, e)
 	}
-
 }

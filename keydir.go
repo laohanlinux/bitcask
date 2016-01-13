@@ -44,3 +44,11 @@ func (keyDirs *KeyDirs) put(key string, e *entry) {
 
 	keyDirs.entrys[key] = old
 }
+
+func (keyDirs *KeyDirs) get(key string) *entry {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+
+	e, _ := keyDirs.entrys[key]
+	return e
+}
