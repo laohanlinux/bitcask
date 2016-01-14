@@ -17,9 +17,16 @@ const (
 const (
 
 	// HeaderSize : 4 + 4 + 4 + 4
+	/**
+		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
+		4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
+	**/
 	HeaderSize = 16
 	// HintHeaderSize : 4 + 4 + 4 + 8 = 20 byte
-	// {timeStamp:keySize:valueOffset:key}
+	/**
+	tstamp	:	ksz	:	valuesz	：	valuePos	:	key
+		4	:	4	:	4		:		8		:	xxxx
+	*/
 	HintHeaderSize = 20
 )
 
@@ -47,6 +54,15 @@ func (bfs *BFiles) put(bf *BFile, fileID uint32) {
 	bfs.rwLock.Lock()
 	defer bfs.rwLock.Unlock()
 	bfs.bfs[fileID] = bf
+}
+
+func (bfs *BFiles) close() {
+	bfs.rwLock.Lock()
+	defer bfs.rwLock.Unlock()
+	for _, bf := range bfs.bfs {
+		bf.fp.Close()
+		bf.hintFp.Close()
+	}
 }
 
 // BFile 可写文件信息 1: datafile and hint file
@@ -122,15 +138,14 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 	// TODO
 	// assert WriteAt function
 	bf.fp.WriteAt(vec, int64(bf.writeOffset))
-	bf.writeOffset += uint64(entrySize)
 
 	// 2. write hint file disk
 	hintData := encodeHint(timeStamp, keySize, entrySize, entryPos, key)
 
 	// TODO
 	// assert write function
-	bf.hintFp.Write(hintData)
-
+	bf.hintFp.WriteAt(hintData, int64(bf.writeOffset))
+	bf.writeOffset += uint64(entrySize)
 	return entry{
 		fileID:    bf.fileID,
 		entryLen:  entrySize,

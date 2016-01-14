@@ -15,23 +15,37 @@ func writePID(pidFp *os.File, fileID uint32) {
 	pidFp.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\t"+strconv.Itoa(int(fileID))+".data"), 0)
 }
 
-func lastFileID(files []*os.File) uint32 {
+func lastFileInfo(files []*os.File) (uint32, *os.File) {
 	if files == nil {
-		return uint32(0)
+		return uint32(0), nil
 	}
 	lastFp := files[0]
-	idxs := strings.Split(lastFp.Name(), ".")
-	idx, _ := strconv.Atoi(idxs[0])
+
+	fileName := lastFp.Name()
+	s := strings.LastIndex(fileName, "/") + 1
+	e := strings.LastIndex(fileName, ".hint")
+	idx, _ := strconv.Atoi(fileName[s:e])
 	lastID := idx
 	for i := 0; i < len(files); i++ {
-		lastFp := files[i]
-		idxs = strings.Split(lastFp.Name(), ".")
-		idx, _ = strconv.Atoi(idxs[0])
+		idxFp := files[i]
+		fileName = lastFp.Name()
+		s = strings.LastIndex(fileName, "/") + 1
+		e = strings.LastIndex(fileName, ".hint")
+		idx, _ = strconv.Atoi(fileName[s:e])
 		if lastID < idx {
 			lastID = idx
+			lastFp = idxFp
 		}
 	}
-	return uint32(lastID)
+	return uint32(lastID), lastFp
+}
+
+func closeReadHintFp(files []*os.File, fileID uint32) {
+	for _, fp := range files {
+		if !strings.Contains(fp.Name(), strconv.Itoa(int(fileID))) {
+			fp.Close()
+		}
+	}
 }
 
 func lockAcquire(fileName string, isWriteLock bool) *Lock {
@@ -51,10 +65,13 @@ func lockAcquire(fileName string, isWriteLock bool) *Lock {
 }
 
 func setWriteableFile(fileID uint32, dirName string) (*os.File, uint32) {
+	var fp *os.File
+	var err error
 	if fileID == 0 {
 		fileID = uint32(time.Now().Unix())
 	}
-	fp, err := os.Create(dirName + "/" + strconv.Itoa(int(fileID)) + ".data")
+	fileName := dirName + "/" + strconv.Itoa(int(fileID)) + ".data"
+	fp, err = os.OpenFile(fileName, os.O_APPEND|os.O_EXCL, 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +79,13 @@ func setWriteableFile(fileID uint32, dirName string) (*os.File, uint32) {
 }
 
 func setHintFile(fileID uint32, dirName string) *os.File {
-	fp, err := os.Create(dirName + "/" + strconv.Itoa(int(fileID)) + ".hint")
+	var fp *os.File
+	var err error
+	if fileID == 0 {
+		fileID = uint32(time.Now().Unix())
+	}
+	fileName := dirName + "/" + strconv.Itoa(int(fileID)) + ".hint"
+	fp, err = os.OpenFile(fileName, os.O_APPEND|os.O_EXCL, 0755)
 	if err != nil {
 		panic(err)
 	}

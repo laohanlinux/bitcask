@@ -2,7 +2,6 @@ package bitcask
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/laohanlinux/assert"
@@ -10,7 +9,7 @@ import (
 
 func TestBitCask(t *testing.T) {
 	// clear dirty
-	os.RemoveAll("testBitcask")
+	//os.RemoveAll("testBitcask")
 	b, err := Open("testBitcask", nil)
 	fmt.Println(err)
 	assert.Nil(t, err)
@@ -24,7 +23,7 @@ func TestBitCask(t *testing.T) {
 	fmt.Println("value:", string(v))
 	assert.Equal(t, v, value)
 
-	testKey = []byte("张三")
+	testKey = []byte("xiaoMing")
 	value = []byte("住在棠下")
 	b.Put(testKey, value)
 	v, err = b.Get(testKey)
@@ -36,4 +35,6 @@ func TestBitCask(t *testing.T) {
 	v, err = b.Get(testKey)
 	fmt.Println("value:", string(v))
 	assert.Equal(t, v, value)
+
+	b.Close()
 }

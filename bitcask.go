@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/laohanlinux/go-logger/logger"
 )
@@ -39,33 +40,35 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 	b := &BitCask{}
 	b.dirFile = dirName
 	b.ActiveFile = newBFiles()
+	b.rwLock = &sync.RWMutex{}
 
 	// 锁住进程ID到锁文件中
 	b.lockFile, err = lockFile(dirName + "/" + lockFileName)
 	if err != nil {
 		return nil, err
 	}
-	// 暂时不知道有什么鬼用
+
 	b.keyDirs = NewKeyDir(dirName)
 	//　获取可读文件
 	files, _ := b.readableFiles()
+	logger.Info(files, len(files), cap(files))
 	// 检索可读文件
-	b.scanKeyFiles(files)
+	b.parseHint(files)
 	// 获取最新fileID
-	fileID := lastFileID(files)
+	fileID, hintFp := lastFileInfo(files)
+	logger.Info("最新的fileid:", fileID)
 	var writeFp *os.File
-	var hintFp *os.File
-	if fileID == uint32(0) {
-		// new create data file
-		writeFp, fileID = setWriteableFile(fileID, dirName)
-		// new Hint data file
-		hintFp = setHintFile(fileID, dirName)
-	}
+	writeFp, fileID = setWriteableFile(fileID, dirName)
+	hintFp = setHintFile(fileID, dirName)
+	// close other hint
+	closeReadHintFp(files, fileID)
 	// 设置writeable文件
+	dataStat, _ := writeFp.Stat()
+	logger.Info("writeoffset:", dataStat.Size())
 	bf := &BFile{
 		fp:          writeFp,
 		fileID:      fileID,
-		writeOffset: 0,
+		writeOffset: uint64(dataStat.Size()),
 		hintFp:      hintFp,
 	}
 	b.writeFile = bf
@@ -79,38 +82,58 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 type BitCask struct {
 	MaxFileSize uint64 // single file maxsize
 	Opts        *Options
-	ActiveFile  *BFiles // data file
+	ActiveFile  *BFiles // hint file, data file
 	lockFile    *os.File
 	keyDirs     *KeyDirs
 	dirFile     string // bitcask storage  root dir
 	writeFile   *BFile // writeable file
+	rwLock      *sync.RWMutex
 }
 
-// Close ...
+// Close opening fp
 func (bc *BitCask) Close() {
+	// close ActiveFiles
+	bc.ActiveFile.close()
+	// close writeable file
+	bc.writeFile.fp.Close()
+	bc.writeFile.hintFp.Close()
+	// close lockFile
+	bc.lockFile.Close()
+	// delete lockFile
+	os.Remove(bc.dirFile + "/" + lockFileName)
 }
 
-// Put ...
+// Put key/value
 func (bc *BitCask) Put(key []byte, value []byte) {
+	bc.rwLock.Lock()
+	defer bc.rwLock.Unlock()
 	if bc.writeFile == nil {
 		panic("read only")
 	}
-	switch bc.writeFile.checkWrite(key, value, bc.MaxFileSize) {
-	case Wrap:
-		e, err := bc.writeFile.writeDatat(key, value)
-		if err != nil {
-			panic(err)
+	bc.writeFile.writeDatat(key, value)
+	if bc.writeFile.writeOffset > bc.MaxFileSize {
+		//close data/hint fp
+		bc.writeFile.hintFp.Close()
+		bc.writeFile.fp.Close()
+
+		writeFp, fileID := setWriteableFile(0, bc.dirFile)
+		hintFp := setHintFile(fileID, bc.dirFile)
+		bf := &BFile{
+			fp:          writeFp,
+			fileID:      fileID,
+			writeOffset: 0,
+			hintFp:      hintFp,
 		}
-		// must to put key/value into keyDirs(HashMap)
-		keyDirs.put(string(key), &e)
-	case Fresh:
-		// time to start our first write file
-	case Ok:
+		bc.writeFile = bf
+		// 把进程ID写入锁文件
+		writePID(bc.lockFile, fileID)
 	}
 }
 
 // Get ...
 func (bc *BitCask) Get(key []byte) ([]byte, error) {
+	bc.rwLock.RLock()
+	defer bc.rwLock.RUnlock()
 	e := keyDirs.get(string(key))
 	if e == nil {
 		return nil, ErrNotFound
@@ -127,41 +150,51 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 	return bf.read(e.offset, e.entryLen)
 }
 
-// return readable file: xxxx.data, yyyyy.data
+// return readable file: xxxx.hint
 func (bc *BitCask) readableFiles() ([]*os.File, error) {
-	ldfs, err := bc.listDataFiles()
+	ldfs, err := bc.listHintFiles()
+	//logger.Info(ldfs)
 	if err != nil {
 		return nil, err
 	}
 
-	fps := make([]*os.File, len(ldfs))
-	for idx, filePath := range ldfs {
-		fp, err := os.Open(filePath)
+	fps := make([]*os.File, 0, len(ldfs))
+	for _, filePath := range ldfs {
+		if filePath == lockFileName {
+			continue
+		}
+		logger.Info(filePath)
+		fp, err := os.OpenFile(bc.dirFile+"/"+filePath, os.O_RDONLY, 0755)
 		if err != nil {
 			return nil, err
 		}
-		fps[idx] = fp
+		fps = append(fps, fp)
+	}
+	if len(fps) == 0 {
+		return nil, nil
 	}
 	return fps, nil
 }
 
-func (bc *BitCask) listDataFiles() ([]string, error) {
+func (bc *BitCask) listHintFiles() ([]string, error) {
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
 	if err != nil {
 		return nil, err
 	}
 	defer dirFp.Close()
-	return dirFp.Readdirnames(-1)
-}
-
-//
-func (bc *BitCask) scanKeyFiles(files []*os.File) {
-	for _, file := range files {
-		fileName := file.Name()
-		hintName := fileName[0:strings.Index(fileName, "data")] + ".hint"
-		// 检索ｈｉｎｔ文件
-		bc.parseHint(hintName)
+	//
+	lists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		return nil, err
 	}
+
+	var hintLists []string
+	for _, v := range lists {
+		if strings.Contains(v, "hint") {
+			hintLists = append(hintLists, v)
+		}
+	}
+	return hintLists, nil
 }
 
 func (bc *BitCask) getFileState(fileID uint32) *BFile {
@@ -175,43 +208,46 @@ func (bc *BitCask) getFileState(fileID uint32) *BFile {
 	return bf
 }
 
-func (bc *BitCask) parseHint(hintName string) {
-	fp, err := os.Open(hintName)
-	if err != nil {
-		panic(err)
-	}
-	defer fp.Close()
+func (bc *BitCask) parseHint(hintFps []*os.File) {
 
-	b := make([]byte, HintHeaderSize, HintHeaderSize+8)
-	offset := int64(0)
-	fileID, _ := strconv.ParseInt(hintName[:strings.Index(hintName, ".hint")], 10, 32)
+	b := make([]byte, HintHeaderSize, HintHeaderSize)
+	for _, fp := range hintFps {
+		offset := int64(0)
+		hintName := fp.Name()
+		s := strings.LastIndex(hintName, "/") + 1
+		e := strings.LastIndex(hintName, ".hint")
+		fileID, _ := strconv.ParseInt(hintName[s:e], 10, 32)
 
-	for {
-		n, err := fp.ReadAt(b, offset)
-		offset += int64(n)
-		if err != nil && err != io.EOF {
-			panic(err)
+		for {
+			n, err := fp.ReadAt(b, offset)
+			offset += int64(n)
+			if err != nil && err != io.EOF {
+				panic(err)
+			}
+			//time.Sleep(time.Second * 3)
+			logger.Info("n:", n)
+			if err == io.EOF {
+				break
+			}
+
+			if n != HintHeaderSize {
+				panic(n)
+			}
+
+			tStamp, ksz, valueSz, valuePos := decodeHint(b)
+			logger.Info("ksz:", ksz, "offset:", offset)
+			keyByte := make([]byte, ksz)
+			fp.ReadAt(keyByte, offset)
+			key := string(keyByte)
+			e := &entry{
+				fileID:    uint32(fileID),
+				entryLen:  valueSz,
+				offset:    valuePos,
+				timeStamp: tStamp,
+			}
+			offset += int64(ksz)
+			// put entry into keyDirs
+			keyDirs.put(key, e)
 		}
-
-		if err == io.EOF {
-			break
-		}
-
-		if n != HeaderSize {
-			panic(n)
-		}
-
-		tStamp, ksz, valueSz, valuePos := decodeHint(b)
-		keyByte := make([]byte, ksz)
-		fp.ReadAt(keyByte, offset)
-		key := string(keyByte)
-		e := &entry{
-			fileID:    uint32(fileID),
-			entryLen:  valueSz,
-			offset:    valuePos,
-			timeStamp: tStamp,
-		}
-		// put entry into keyDirs
-		keyDirs.put(key, e)
 	}
 }
