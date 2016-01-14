@@ -18,14 +18,16 @@ type KeyDirs struct {
 }
 
 // NewKeyDir return a KeyDir Obj
-func NewKeyDir(dirName string, timeoutSecs int) *KeyDirs {
+func NewKeyDir(dirName string) *KeyDirs {
 	//filepath.Abs(fp.Name())
 	keyDirsLock.Lock()
 	defer keyDirsLock.Unlock()
 
 	keyDirsOnce.Do(func() {
 		if keyDirs == nil {
-			keyDirs = &KeyDirs{}
+			keyDirs = &KeyDirs{
+				entrys: make(map[string]*entry),
+			}
 		}
 	})
 	return keyDirs

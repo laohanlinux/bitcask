@@ -2,10 +2,10 @@ package bitcask
 
 // {fileID:value_sz:value_pos:tstamp}
 type entry struct {
-	fileID    int32 // file id
-	entryLen  int32
-	offset    int64 // file offset in data block
-	timeStamp int32 // file access time spot
+	fileID    uint32 // file id
+	entryLen  uint32
+	offset    uint64 // file offset in data block
+	timeStamp uint32 // file access time spot
 }
 
 func (e *entry) isNewerThan(old *entry) bool {
