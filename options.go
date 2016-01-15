@@ -6,12 +6,13 @@ const (
 	defaultTimeoutSecs = 10
 )
 
-// Options ...
+// Options .
+// now, just MaxFileSize is used
 type Options struct {
-	expirySecs      int
-	maxFileSize     uint64
-	openTimeoutSecs int
-	readWrite       bool
+	ExpirySecs      int
+	MaxFileSize     uint64
+	OpenTimeoutSecs int
+	ReadWrite       bool
 }
 
 // NewOptions ...
@@ -29,20 +30,17 @@ func NewOptions(expirySecs int, maxFileSize uint64, openTimeoutSecs int, readWri
 	}
 
 	return Options{
-		expirySecs:      expirySecs,
-		openTimeoutSecs: openTimeoutSecs,
-		maxFileSize:     maxFileSize,
-		readWrite:       readWrite,
+		ExpirySecs:      expirySecs,
+		OpenTimeoutSecs: openTimeoutSecs,
+		MaxFileSize:     maxFileSize,
+		ReadWrite:       readWrite,
 	}
 }
 
 // ExpiryTime ...
 func (opt *Options) ExpiryTime() int {
-	if opt.expirySecs > 0 {
+	if opt.ExpirySecs > 0 {
 
 	}
 	return 0
 }
-
-// IsReadWrite ...
-func (opt *Options) IsReadWrite() bool { return opt.readWrite }

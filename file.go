@@ -95,7 +95,6 @@ func openBFile(dirName string, tStamp int) *BFile {
 }
 
 func (bf *BFile) read(offset uint64, length uint32) ([]byte, error) {
-
 	/**
 		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
 		4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
@@ -108,20 +107,7 @@ func (bf *BFile) read(offset uint64, length uint32) ([]byte, error) {
 	return decodeEntry(header)
 }
 
-// 检测可写文件
-func (bf *BFile) checkWrite(key []byte, value []byte, maxFileSize uint64) int {
-	if bf.fileID == 0 {
-		return Fresh
-	}
-
-	size := HeaderSize + len(key) + len(value)
-
-	if bf.writeOffset+uint64(size) > maxFileSize {
-		return Wrap
-	}
-	return Ok
-}
-
+// including writing data file and hint file
 func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 	// 1. write into datafile
 	timeStamp := uint32(time.Now().Unix())
@@ -137,15 +123,23 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 	// write data file into disk
 	// TODO
 	// assert WriteAt function
-	bf.fp.WriteAt(vec, int64(bf.writeOffset))
-
+	_, err := appendWriteFile(bf.fp, vec)
+	if err != nil {
+		panic(err)
+	}
+	//logger.Debug("has write into data file:", n)
 	// 2. write hint file disk
 	hintData := encodeHint(timeStamp, keySize, entrySize, entryPos, key)
 
 	// TODO
 	// assert write function
-	bf.hintFp.WriteAt(hintData, int64(bf.writeOffset))
+	_, err = appendWriteFile(bf.hintFp, hintData)
+	if err != nil {
+		panic(err)
+	}
+	//logger.Debug("has write into hint file:", n)
 	bf.writeOffset += uint64(entrySize)
+
 	return entry{
 		fileID:    bf.fileID,
 		entryLen:  entrySize,

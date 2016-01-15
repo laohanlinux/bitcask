@@ -7,8 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/laohanlinux/go-logger/logger"
+	"time"
 )
 
 // ErrNotFound ...
@@ -37,34 +36,33 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 		}
 	}
 
-	b := &BitCask{}
-	b.dirFile = dirName
-	b.ActiveFile = newBFiles()
-	b.rwLock = &sync.RWMutex{}
-
-	// 锁住进程ID到锁文件中
+	b := &BitCask{
+		Opts:       opts,
+		dirFile:    dirName,
+		ActiveFile: newBFiles(),
+		rwLock:     &sync.RWMutex{},
+	}
+	// lock file
 	b.lockFile, err = lockFile(dirName + "/" + lockFileName)
 	if err != nil {
 		return nil, err
 	}
 
 	b.keyDirs = NewKeyDir(dirName)
-	//　获取可读文件
+	// scan readAble file
 	files, _ := b.readableFiles()
-	logger.Info(files, len(files), cap(files))
-	// 检索可读文件
 	b.parseHint(files)
-	// 获取最新fileID
+	// get the last fileid
 	fileID, hintFp := lastFileInfo(files)
-	logger.Info("最新的fileid:", fileID)
+
 	var writeFp *os.File
 	writeFp, fileID = setWriteableFile(fileID, dirName)
+
 	hintFp = setHintFile(fileID, dirName)
 	// close other hint
 	closeReadHintFp(files, fileID)
-	// 设置writeable文件
+	// setting writeable file, only one
 	dataStat, _ := writeFp.Stat()
-	logger.Info("writeoffset:", dataStat.Size())
 	bf := &BFile{
 		fp:          writeFp,
 		fileID:      fileID,
@@ -72,22 +70,20 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 		hintFp:      hintFp,
 	}
 	b.writeFile = bf
-	fmt.Println(b.writeFile)
-	// 把进程ID写入锁文件
+	// save pid into bitcask.lock file
 	writePID(b.lockFile, fileID)
 	return b, nil
 }
 
 // BitCask ...
 type BitCask struct {
-	MaxFileSize uint64 // single file maxsize
-	Opts        *Options
-	ActiveFile  *BFiles // hint file, data file
-	lockFile    *os.File
-	keyDirs     *KeyDirs
-	dirFile     string // bitcask storage  root dir
-	writeFile   *BFile // writeable file
-	rwLock      *sync.RWMutex
+	Opts       *Options      // opts for bitcask
+	ActiveFile *BFiles       // hint file, data file
+	lockFile   *os.File      // lock file with process
+	keyDirs    *KeyDirs      // key/value hashMap, building with hint file
+	dirFile    string        // bitcask storage  root dir
+	writeFile  *BFile        // writeable file
+	rwLock     *sync.RWMutex // rwlocker for bitcask Get and put Operation
 }
 
 // Close opening fp
@@ -104,14 +100,15 @@ func (bc *BitCask) Close() {
 }
 
 // Put key/value
-func (bc *BitCask) Put(key []byte, value []byte) {
+func (bc *BitCask) Put(key []byte, value []byte) error {
 	bc.rwLock.Lock()
 	defer bc.rwLock.Unlock()
 	if bc.writeFile == nil {
-		panic("read only")
+		return fmt.Errorf("Can Not Read The Bitcask Root Director")
 	}
-	bc.writeFile.writeDatat(key, value)
-	if bc.writeFile.writeOffset > bc.MaxFileSize {
+
+	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
+		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
 		//close data/hint fp
 		bc.writeFile.hintFp.Close()
 		bc.writeFile.fp.Close()
@@ -125,9 +122,18 @@ func (bc *BitCask) Put(key []byte, value []byte) {
 			hintFp:      hintFp,
 		}
 		bc.writeFile = bf
-		// 把进程ID写入锁文件
+		// update pid
 		writePID(bc.lockFile, fileID)
 	}
+
+	// write data into writeable file
+	e, err := bc.writeFile.writeDatat(key, value)
+	if err != nil {
+		return err
+	}
+	// add key/value into keydirs
+	keyDirs.put(string(key), &e)
+	return nil
 }
 
 // Get ...
@@ -139,21 +145,19 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 		return nil, ErrNotFound
 	}
 
-	// get the value from data file
 	fileID := e.fileID
 	bf := bc.getFileState(fileID)
 	if bf == nil {
 		panic(bf)
 	}
 
-	logger.Info("entry offset:", e.offset, "\t entryLen:", e.entryLen)
+	//logger.Info("fileID", fileID, "entry offset:", e.offset, "\t entryLen:", e.entryLen)
 	return bf.read(e.offset, e.entryLen)
 }
 
-// return readable file: xxxx.hint
+// return readable hint file: xxxx.hint
 func (bc *BitCask) readableFiles() ([]*os.File, error) {
 	ldfs, err := bc.listHintFiles()
-	//logger.Info(ldfs)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +167,6 @@ func (bc *BitCask) readableFiles() ([]*os.File, error) {
 		if filePath == lockFileName {
 			continue
 		}
-		logger.Info(filePath)
 		fp, err := os.OpenFile(bc.dirFile+"/"+filePath, os.O_RDONLY, 0755)
 		if err != nil {
 			return nil, err
@@ -198,6 +201,11 @@ func (bc *BitCask) listHintFiles() ([]string, error) {
 }
 
 func (bc *BitCask) getFileState(fileID uint32) *BFile {
+	// lock up it from write able file
+	if fileID == bc.writeFile.fileID {
+		return bc.writeFile
+	}
+	// if not exits in write able file, look up it from ActiveFile
 	bf := bc.ActiveFile.get(fileID)
 	if bf != nil {
 		return bf
@@ -224,8 +232,7 @@ func (bc *BitCask) parseHint(hintFps []*os.File) {
 			if err != nil && err != io.EOF {
 				panic(err)
 			}
-			//time.Sleep(time.Second * 3)
-			logger.Info("n:", n)
+			//logger.Info("n:", n, err)
 			if err == io.EOF {
 				break
 			}
@@ -235,7 +242,7 @@ func (bc *BitCask) parseHint(hintFps []*os.File) {
 			}
 
 			tStamp, ksz, valueSz, valuePos := decodeHint(b)
-			logger.Info("ksz:", ksz, "offset:", offset)
+			//logger.Info("ksz:", ksz, "offset:", offset)
 			keyByte := make([]byte, ksz)
 			fp.ReadAt(keyByte, offset)
 			key := string(keyByte)

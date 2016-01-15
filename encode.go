@@ -27,14 +27,15 @@ func encodeEntry(tStamp, keySize, valueSize uint32, key, value []byte) []byte {
 }
 
 func decodeEntry(buf []byte) ([]byte, error) {
-	// decode
+	/**
+	    crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
+	    4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
+	**/
 	ksz := binary.LittleEndian.Uint32(buf[8:12])
+
 	valuesz := binary.LittleEndian.Uint32(buf[12:16])
-	//tStamp := binary.LittleEndian.Uint32(buf[4:8])
 	c32 := binary.LittleEndian.Uint32(buf[:4])
-	//key := make([]byte, ksz)
 	value := make([]byte, valuesz)
-	//copy(Key, buf[16:(16+ksz)])
 	copy(value, buf[(16+ksz):(16+ksz+valuesz)])
 
 	if crc32.ChecksumIEEE(buf[4:]) != c32 {
@@ -47,7 +48,7 @@ func encodeHint(tStamp, ksz, valueSz uint32, valuePos uint64, key []byte) []byte
 	/**
 		    tStamp	:	ksz	:	valueSz	:	valuePos	:	key
 	        4       :   4   :   4       :       8       :   xxxxx
-		**/
+	**/
 	buf := make([]byte, 20+len(key))
 	binary.LittleEndian.PutUint32(buf[0:4], tStamp)
 	binary.LittleEndian.PutUint32(buf[4:8], ksz)
@@ -58,6 +59,10 @@ func encodeHint(tStamp, ksz, valueSz uint32, valuePos uint64, key []byte) []byte
 }
 
 func decodeHint(buf []byte) (uint32, uint32, uint32, uint64) {
+	/**
+	    tStamp	:	ksz	:	valueSz	:	valuePos	:	key
+		4       :   4   :   4       :       8       :   xxxxx
+	**/
 	tStamp := binary.LittleEndian.Uint32(buf[:4])
 	ksz := binary.LittleEndian.Uint32(buf[4:8])
 	valueSz := binary.LittleEndian.Uint32(buf[8:12])

@@ -8,7 +8,7 @@ import (
 )
 
 func lockFile(fileName string) (*os.File, error) {
-	return os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	return os.OpenFile(fileName, os.O_EXCL|os.O_CREATE|os.O_RDWR, os.ModePerm)
 }
 
 func writePID(pidFp *os.File, fileID uint32) {
@@ -28,7 +28,7 @@ func lastFileInfo(files []*os.File) (uint32, *os.File) {
 	lastID := idx
 	for i := 0; i < len(files); i++ {
 		idxFp := files[i]
-		fileName = lastFp.Name()
+		fileName = idxFp.Name()
 		s = strings.LastIndex(fileName, "/") + 1
 		e = strings.LastIndex(fileName, ".hint")
 		idx, _ = strconv.Atoi(fileName[s:e])
@@ -71,7 +71,7 @@ func setWriteableFile(fileID uint32, dirName string) (*os.File, uint32) {
 		fileID = uint32(time.Now().Unix())
 	}
 	fileName := dirName + "/" + strconv.Itoa(int(fileID)) + ".data"
-	fp, err = os.OpenFile(fileName, os.O_APPEND|os.O_EXCL, 0755)
+	fp, err = os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -85,9 +85,18 @@ func setHintFile(fileID uint32, dirName string) *os.File {
 		fileID = uint32(time.Now().Unix())
 	}
 	fileName := dirName + "/" + strconv.Itoa(int(fileID)) + ".hint"
-	fp, err = os.OpenFile(fileName, os.O_APPEND|os.O_EXCL, 0755)
+	fp, err = os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
 		panic(err)
 	}
 	return fp
+}
+
+func appendWriteFile(fp *os.File, buf []byte) (int, error) {
+	stat, err := fp.Stat()
+	if err != nil {
+		return -1, err
+	}
+
+	return fp.WriteAt(buf, stat.Size())
 }
