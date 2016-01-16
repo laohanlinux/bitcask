@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // ErrNotFound ...
@@ -107,25 +106,7 @@ func (bc *BitCask) Put(key []byte, value []byte) error {
 		return fmt.Errorf("Can Not Read The Bitcask Root Director")
 	}
 
-	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
-		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
-		//close data/hint fp
-		bc.writeFile.hintFp.Close()
-		bc.writeFile.fp.Close()
-
-		writeFp, fileID := setWriteableFile(0, bc.dirFile)
-		hintFp := setHintFile(fileID, bc.dirFile)
-		bf := &BFile{
-			fp:          writeFp,
-			fileID:      fileID,
-			writeOffset: 0,
-			hintFp:      hintFp,
-		}
-		bc.writeFile = bf
-		// update pid
-		writePID(bc.lockFile, fileID)
-	}
-
+	checkWriteableFile(bc)
 	// write data into writeable file
 	e, err := bc.writeFile.writeDatat(key, value)
 	if err != nil {
@@ -155,8 +136,33 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 	return bf.read(e.offset, e.entryLen)
 }
 
+// Del value by key
+func (bc *BitCask) Del(key []byte) error {
+	bc.rwLock.Lock()
+	defer bc.rwLock.Unlock()
+	if bc.writeFile == nil {
+		return fmt.Errorf("Can Not Read The Bitcask Root Director")
+	}
+
+	e := keyDirs.get(string(key))
+	if e == nil {
+		return ErrNotFound
+	}
+
+	checkWriteableFile(bc)
+	// write data into writeable file
+	err := bc.writeFile.del(key)
+	if err != nil {
+		return err
+	}
+	// delete key/value from keydirs
+	keyDirs.del(string(key))
+	return nil
+}
+
 // return readable hint file: xxxx.hint
 func (bc *BitCask) readableFiles() ([]*os.File, error) {
+	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
 	ldfs, err := bc.listHintFiles()
 	if err != nil {
 		return nil, err
@@ -164,7 +170,7 @@ func (bc *BitCask) readableFiles() ([]*os.File, error) {
 
 	fps := make([]*os.File, 0, len(ldfs))
 	for _, filePath := range ldfs {
-		if filePath == lockFileName {
+		if existsSuffixs(filterFiles, filePath) {
 			continue
 		}
 		fp, err := os.OpenFile(bc.dirFile+"/"+filePath, os.O_RDONLY, 0755)
@@ -243,9 +249,13 @@ func (bc *BitCask) parseHint(hintFps []*os.File) {
 
 			tStamp, ksz, valueSz, valuePos := decodeHint(b)
 			//logger.Info("ksz:", ksz, "offset:", offset)
+			if ksz+valueSz == 0 { // the record is deleted
+				continue
+			}
 			keyByte := make([]byte, ksz)
 			fp.ReadAt(keyByte, offset)
 			key := string(keyByte)
+
 			e := &entry{
 				fileID:    uint32(fileID),
 				entryLen:  valueSz,

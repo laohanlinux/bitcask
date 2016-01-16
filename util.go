@@ -7,8 +7,42 @@ import (
 	"time"
 )
 
+const (
+	lockFileName    = "bitcask.lock"
+	mergeDataSuffix = "merge.data"
+	mergeHintSuffix = "merge.hint"
+)
+
+func checkWriteableFile(bc *BitCask) {
+	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
+		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
+		//close data/hint fp
+		bc.writeFile.hintFp.Close()
+		bc.writeFile.fp.Close()
+
+		writeFp, fileID := setWriteableFile(0, bc.dirFile)
+		hintFp := setHintFile(fileID, bc.dirFile)
+		bf := &BFile{
+			fp:          writeFp,
+			fileID:      fileID,
+			writeOffset: 0,
+			hintFp:      hintFp,
+		}
+		bc.writeFile = bf
+		// update pid
+		writePID(bc.lockFile, fileID)
+	}
+}
+
 func lockFile(fileName string) (*os.File, error) {
 	return os.OpenFile(fileName, os.O_EXCL|os.O_CREATE|os.O_RDWR, os.ModePerm)
+}
+
+func existsSuffixs(suffixs []string, src string) (b bool) {
+	for _, suffix := range suffixs {
+		b = strings.HasSuffix(src, suffix)
+	}
+	return
 }
 
 func writePID(pidFp *os.File, fileID uint32) {
@@ -45,22 +79,6 @@ func closeReadHintFp(files []*os.File, fileID uint32) {
 		if !strings.Contains(fp.Name(), strconv.Itoa(int(fileID))) {
 			fp.Close()
 		}
-	}
-}
-
-func lockAcquire(fileName string, isWriteLock bool) *Lock {
-
-	var fp *os.File
-	var err error
-	if isWriteLock {
-		if fp, err = lockFile(fileName); err != nil {
-			panic(err)
-		}
-	}
-
-	return &Lock{
-		Fp:          fp,
-		IsWriteLock: isWriteLock,
 	}
 }
 

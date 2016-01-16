@@ -18,3 +18,10 @@
 用于重建`HashMap`数据结构以及`HashMap`的持久化。
 
 ![](http://pic.yupoo.com/iammutex/BwqvTat7/o6LeV.jpg)
+
+
+## 其他惨谁说明
+
+文件的删除标志由ksz 和 valuesz 决定
+
+如果ksz 和 valuesz 都为0，则表示该记录的操作是删除的操作。

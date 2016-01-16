@@ -31,4 +31,20 @@ func main() {
 	v2, _ = bc.Get(k2)
 	logger.Info(string(k2), string(v2))
 
+	bc.Del(k1)
+	bc.Del(k2)
+	logger.Info("毕业后的数据库：")
+	v1, e := bc.Get(k1)
+	if e != bitcask.ErrNotFound {
+		logger.Info(string(k1), "shoud be:", bitcask.ErrNotFound)
+	} else {
+		logger.Info(string(k1), "已经毕业.")
+	}
+	v2, e = bc.Get(k2)
+	if e != bitcask.ErrNotFound {
+		logger.Info(string(k1), "shoud be:", bitcask.ErrNotFound)
+	} else {
+		logger.Info(string(k2), "已经毕业.")
+	}
+
 }

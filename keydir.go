@@ -3,13 +3,13 @@ package bitcask
 import "sync"
 
 // KeyDirs for HashMap
-var keyDirsLock *sync.Mutex
+var keyDirsLock *sync.RWMutex
 
 var keyDirs *KeyDirs
 var keyDirsOnce sync.Once
 
 func init() {
-	keyDirsLock = &sync.Mutex{}
+	keyDirsLock = &sync.RWMutex{}
 }
 
 // KeyDirs ...
@@ -48,9 +48,14 @@ func (keyDirs *KeyDirs) put(key string, e *entry) {
 }
 
 func (keyDirs *KeyDirs) get(key string) *entry {
-	keyDirsLock.Lock()
-	defer keyDirsLock.Unlock()
-
+	keyDirsLock.RLock()
+	defer keyDirsLock.RUnlock()
 	e, _ := keyDirs.entrys[key]
 	return e
+}
+
+func (keyDirs *KeyDirs) del(key string) {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+	delete(keyDirs.entrys, key)
 }

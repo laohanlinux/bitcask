@@ -147,3 +147,39 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 		timeStamp: timeStamp,
 	}, nil
 }
+
+func (bf *BFile) del(key []byte) error {
+	// 1. write into datafile
+	timeStamp := uint32(time.Now().Unix())
+	keySize := uint32(0)
+	valueSize := uint32(0)
+	vec := encodeEntry(timeStamp, keySize, valueSize, key, nil)
+	//logger.Info(len(vec), keySize, valueSize)
+	entrySize := HeaderSize + keySize + valueSize
+	// TODO
+	// race data
+	entryPos := bf.writeOffset
+
+	// write data file into disk
+	// TODO
+	// assert WriteAt function
+	_, err := appendWriteFile(bf.fp, vec)
+	if err != nil {
+		panic(err)
+	}
+
+	//logger.Debug("has write into data file:", n)
+	// 2. write hint file disk
+	hintData := encodeHint(timeStamp, keySize, entrySize, entryPos, key)
+
+	// TODO
+	// assert write function
+	_, err = appendWriteFile(bf.hintFp, hintData)
+	if err != nil {
+		panic(err)
+	}
+	//logger.Debug("has write into hint file:", n)
+	bf.writeOffset += uint64(entrySize)
+
+	return nil
+}

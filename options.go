@@ -2,7 +2,7 @@ package bitcask
 
 const (
 	defaultExpirySecs  = 0
-	defaultMaxFileSize = 1024 * 1024 * 4
+	defaultMaxFileSize = 1 << 30 // 1G
 	defaultTimeoutSecs = 10
 )
 

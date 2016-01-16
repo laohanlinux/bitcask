@@ -101,9 +101,9 @@ func TestBitCask(t *testing.T) {
 
 func BenchmarkBitcaskCurrency(b *testing.B) {
 	storagePath := "benchMarkBitcask"
-	//	os.RemoveAll(storagePath)
+	os.RemoveAll(storagePath)
 	opts := &Options{
-		MaxFileSize: 100,
+		MaxFileSize: 1 << 30,
 	}
 	bc, err := Open(storagePath, opts)
 	if err != nil {
@@ -111,22 +111,42 @@ func BenchmarkBitcaskCurrency(b *testing.B) {
 	}
 
 	keyValues := make(map[int]string)
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; i < b.N/2; i++ {
 		key := strconv.Itoa(i)
 		value := strconv.Itoa(int(time.Now().Unix()))
 		bc.Put([]byte(key), []byte(value))
 		keyValues[i] = value
 	}
-
-	for i := 0; i < b.N; i++ {
+	logger.Warn(b.N)
+	logger.Info("Put all Data")
+	for i := 0; i < b.N/2; i++ {
 		k := strconv.Itoa(i)
-
 		v, _ := bc.Get([]byte(k))
 		if string(v) != keyValues[i] {
 			logger.Error(string(v), keyValues[i])
 			os.Exit(-1)
 		}
 	}
-
+	logger.Info("Get all data")
+	// delete all data
+	for i := 0; i < b.N/2; i++ {
+		k := strconv.Itoa(i)
+		//v, _ := bc.Get([]byte(k))
+		err := bc.Del([]byte(k))
+		if err != nil {
+			logger.Error(err)
+		}
+	}
+	logger.Info("Delete all data")
+	// Get all data
+	for i := 0; i < b.N/2; i++ {
+		k := strconv.Itoa(i)
+		v, err := bc.Get([]byte(k))
+		if err != ErrNotFound {
+			logger.Error(string(v), keyValues[i])
+		}
+	}
+	logger.Info("all data is not found")
 	bc.Close()
 }
