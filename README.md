@@ -50,9 +50,12 @@ func main() {
 `go run example/bitcask_main.go`
 
 ```
-2016/01/15 18:31:15 bitcask_main.go:25 [info [xiaoMing 毕业于新东方推土机学院]]
-2016/01/15 18:31:15 bitcask_main.go:26 [info [zhanSan 毕业于新东方厨师学院]]
-2016/01/15 18:31:15 bitcask_main.go:32 [info [zhanSan 毕业于新东方美容美发学院]]
+2016/01/16 16:56:11 bitcask_main.go:25 [info [xiaoMing 毕业于新东方推土机学院]]
+2016/01/16 16:56:11 bitcask_main.go:26 [info [zhanSan 毕业于新东方厨师学院]]
+2016/01/16 16:56:11 bitcask_main.go:32 [info [zhanSan 毕业于新东方美容美发学院]]
+2016/01/16 16:56:11 bitcask_main.go:36 [info [毕业后的数据库：]]
+2016/01/16 16:56:11 bitcask_main.go:41 [info [xiaoMing 已经毕业.]]
+2016/01/16 16:56:11 bitcask_main.go:47 [info [zhanSan 已经毕业.]]
 ```
 
 other Example: find it in `xxxx_test.go`
@@ -60,4 +63,4 @@ other Example: find it in `xxxx_test.go`
 # TODO
 
 - 优化数据结构，减少内存占用
-- 增加delete和merge功能
+- 增加merge功能
