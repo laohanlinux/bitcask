@@ -13,6 +13,44 @@ const (
 	mergeHintSuffix = "merge.hint"
 )
 
+func getMergeHintFile(bc *BitCask) string {
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+	if err != nil {
+		panic(err)
+	}
+	defer dirFp.Close()
+	fileLists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range fileLists {
+		if strings.HasSuffix(file, mergeHintSuffix) {
+			return file
+		}
+	}
+	return bc.dirFile + "/" + strconv.Itoa(int(time.Now().Unix())) + mergeHintSuffix
+}
+
+func getMergeDataFile(bc *BitCask) string {
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+	if err != nil {
+		panic(err)
+	}
+	defer dirFp.Close()
+	fileLists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range fileLists {
+		if strings.HasSuffix(file, mergeDataSuffix) {
+			return file
+		}
+	}
+	return bc.dirFile + "/" + strconv.Itoa(int(time.Now().Unix())) + mergeDataSuffix
+}
+
 func checkWriteableFile(bc *BitCask) {
 	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
 		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
@@ -32,6 +70,50 @@ func checkWriteableFile(bc *BitCask) {
 		// update pid
 		writePID(bc.lockFile, fileID)
 	}
+}
+
+func listHintFiles(bc *BitCask) ([]string, error) {
+	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dirFp.Close()
+	//
+	lists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	var hintLists []string
+	for _, v := range lists {
+		if strings.Contains(v, "hint") && !existsSuffixs(filterFiles, v) {
+			hintLists = append(hintLists, v)
+		}
+	}
+	return hintLists, nil
+}
+
+func listDataFiles(bc *BitCask) ([]string, error) {
+	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dirFp.Close()
+	//
+	lists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	var dataFileLists []string
+	for _, v := range lists {
+		if strings.Contains(v, ".data") && !existsSuffixs(filterFiles, v) {
+			dataFileLists = append(dataFileLists, v)
+		}
+	}
+	return dataFileLists, nil
 }
 
 func lockFile(fileName string) (*os.File, error) {

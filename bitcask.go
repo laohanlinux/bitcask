@@ -163,7 +163,7 @@ func (bc *BitCask) Del(key []byte) error {
 // return readable hint file: xxxx.hint
 func (bc *BitCask) readableFiles() ([]*os.File, error) {
 	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
-	ldfs, err := bc.listHintFiles()
+	ldfs, err := listHintFiles(bc)
 	if err != nil {
 		return nil, err
 	}
@@ -183,27 +183,6 @@ func (bc *BitCask) readableFiles() ([]*os.File, error) {
 		return nil, nil
 	}
 	return fps, nil
-}
-
-func (bc *BitCask) listHintFiles() ([]string, error) {
-	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
-	if err != nil {
-		return nil, err
-	}
-	defer dirFp.Close()
-	//
-	lists, err := dirFp.Readdirnames(-1)
-	if err != nil {
-		return nil, err
-	}
-
-	var hintLists []string
-	for _, v := range lists {
-		if strings.Contains(v, "hint") {
-			hintLists = append(hintLists, v)
-		}
-	}
-	return hintLists, nil
 }
 
 func (bc *BitCask) getFileState(fileID uint32) *BFile {

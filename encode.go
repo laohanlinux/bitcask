@@ -45,6 +45,30 @@ func decodeEntry(buf []byte) ([]byte, error) {
 	return value, nil
 }
 
+func decodeEntryDetail(buf []byte) (uint32, uint32, uint32, uint32, []byte, []byte, error) {
+	/**
+		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
+		4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
+	**/
+	tStamp := binary.LittleEndian.Uint32(buf[4:8])
+	ksz := binary.LittleEndian.Uint32(buf[8:12])
+	valuesz := binary.LittleEndian.Uint32(buf[12:HeaderSize])
+	c32 := binary.LittleEndian.Uint32(buf[:4])
+	if crc32.ChecksumIEEE(buf[4:]) != c32 {
+		return 0, 0, 0, 0, nil, nil, ErrCrc32
+	}
+
+	if ksz+valuesz == 0 {
+		return c32, tStamp, ksz, valuesz, nil, nil, nil
+	}
+
+	key := make([]byte, ksz)
+	value := make([]byte, valuesz)
+	copy(key, buf[HeaderSize:HeaderSize+ksz])
+	copy(value, buf[(HeaderSize+ksz):(HeaderSize+ksz+valuesz)])
+	return c32, tStamp, ksz, valuesz, key, value, nil
+}
+
 func encodeHint(tStamp, ksz, valueSz uint32, valuePos uint64, key []byte) []byte {
 	/**
 		    tStamp	:	ksz	:	valueSz	:	valuePos	:	key
