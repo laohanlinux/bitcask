@@ -103,6 +103,21 @@ func (m *Merge) mergeDataFile(dFile string) error {
 		if ksz+valuesz == 0 {
 			continue
 		}
+
+		if e := keyDirs.get(string(key)); e == nil {
+			continue
+		} else {
+			if e.timeStamp > tStamp {
+				continue
+			}
+		}
+		// write date file
+		buf := encodeEntry(tStamp, ksz, valuesz, key, value)
+		_, err := appendWriteFile(mdFp, buf)
+		if err != nil {
+			panic(err)
+		}
 		// write hint file
+
 	}
 }
