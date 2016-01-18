@@ -59,3 +59,13 @@ func (keyDirs *KeyDirs) del(key string) {
 	defer keyDirsLock.Unlock()
 	delete(keyDirs.entrys, key)
 }
+
+func (keyDirs *KeyDirs) updateFileID(oldID, newID uint32) {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+	for _, e := range keyDirs.entrys {
+		if e.fileID == oldID {
+			e.fileID = newID
+		}
+	}
+}

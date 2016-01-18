@@ -19,8 +19,16 @@
 
 ![](http://pic.yupoo.com/iammutex/BwqvTat7/o6LeV.jpg)
 
+## 合并策略 
 
-## 其他惨谁说明
+
+bitcask的主要数据结构由两个 `keyDirs`和`activeFiles` ; 合并步骤：
+
+- 找出需要合并的文件[f1, f2, f3, f4] 
+
+- f1 合并；如果合并的文件已经大于最大的文件设置，则产生新的`data/hint`文件
+
+## 其他参数说明
 
 文件的删除标志由ksz 和 valuesz 决定
 

@@ -56,6 +56,23 @@ func (bfs *BFiles) put(bf *BFile, fileID uint32) {
 	bfs.bfs[fileID] = bf
 }
 
+func (bfs *BFiles) delWithFileID(fileID uint32) error {
+	bfs.rwLock.Lock()
+	defer bfs.rwLock.Unlock()
+	bf, ok := bfs.bfs[fileID]
+	if ok {
+		if err := bf.fp.Close(); err != nil {
+			return err
+		}
+		if err := bf.hintFp.Close(); err != nil {
+			return err
+		}
+		bf.writeOffset = 0
+	}
+	delete(bfs.bfs, fileID)
+	return nil
+}
+
 func (bfs *BFiles) close() {
 	bfs.rwLock.Lock()
 	defer bfs.rwLock.Unlock()

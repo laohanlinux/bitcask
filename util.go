@@ -200,3 +200,15 @@ func appendWriteFile(fp *os.File, buf []byte) (int, error) {
 
 	return fp.WriteAt(buf, stat.Size())
 }
+
+// return a unique file name by timeStamp
+func uniqueFileName(root, suffix string) string {
+	for {
+		tStamp := strconv.Itoa(int(time.Now().Unix()))
+		_, err := os.Stat(root + "/" + tStamp + "." + suffix)
+		if err != nil && os.IsNotExist(err) {
+			return tStamp + "." + suffix
+		}
+		time.Sleep(time.Second)
+	}
+}
