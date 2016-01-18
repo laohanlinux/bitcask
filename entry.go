@@ -15,12 +15,12 @@ func (e *entry) isNewerThan(old *entry) bool {
 	if old.timeStamp > e.timeStamp {
 		return false
 	}
-	//
-	// if old.fileID < e.fileID {
-	// 	return true
-	// }
-	// if old.fileID > e.fileID {
-	// 	return false
-	// }
+
+	if old.fileID < e.fileID {
+		return true
+	}
+	if old.fileID > e.fileID {
+		return false
+	}
 	return old.offset < e.offset
 }

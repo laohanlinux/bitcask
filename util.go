@@ -2,6 +2,7 @@ package bitcask
 
 import (
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ func getMergeHintFile(bc *BitCask) string {
 			return file
 		}
 	}
-	return bc.dirFile + "/" + strconv.Itoa(int(time.Now().Unix())) + mergeHintSuffix
+	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeHintSuffix)
 }
 
 func getMergeDataFile(bc *BitCask) string {
@@ -48,7 +49,8 @@ func getMergeDataFile(bc *BitCask) string {
 			return file
 		}
 	}
-	return bc.dirFile + "/" + strconv.Itoa(int(time.Now().Unix())) + mergeDataSuffix
+
+	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeDataSuffix)
 }
 
 func checkWriteableFile(bc *BitCask) {
@@ -113,6 +115,7 @@ func listDataFiles(bc *BitCask) ([]string, error) {
 			dataFileLists = append(dataFileLists, v)
 		}
 	}
+	sort.Strings(dataFileLists)
 	return dataFileLists, nil
 }
 
@@ -122,7 +125,9 @@ func lockFile(fileName string) (*os.File, error) {
 
 func existsSuffixs(suffixs []string, src string) (b bool) {
 	for _, suffix := range suffixs {
-		b = strings.HasSuffix(src, suffix)
+		if b = strings.HasSuffix(src, suffix); b {
+			return
+		}
 	}
 	return
 }

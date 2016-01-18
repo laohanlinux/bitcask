@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/laohanlinux/go-logger/logger"
 )
 
 // ErrNotFound ...
@@ -18,7 +20,7 @@ var (
 // Open ...
 func Open(dirName string, opts *Options) (*BitCask, error) {
 	if opts == nil {
-		opts1 := NewOptions(0, 0, -1, true)
+		opts1 := NewOptions(0, 0, -1, 60, true)
 		opts = &opts1
 	}
 
@@ -127,6 +129,7 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 	}
 
 	fileID := e.fileID
+	logger.Debug("Get FileID:", fileID)
 	bf := bc.getFileState(fileID)
 	if bf == nil {
 		panic(bf)

@@ -7,7 +7,7 @@ import (
 )
 
 // ErrCrc32 ...
-var ErrCrc32 = fmt.Errorf("file is dirty")
+var ErrCrc32 = fmt.Errorf("ChecksumIEEE error")
 
 func encodeEntry(tStamp, keySize, valueSize uint32, key, value []byte) []byte {
 	/**
