@@ -1,11 +1,12 @@
 package bitcask
 
 // {fileID:value_sz:value_pos:tstamp}
+// 4 * 4 + 64 = 80Bit
 type entry struct {
-	fileID    uint32 // file id
-	entryLen  uint32
-	offset    uint64 // file offset in data block
-	timeStamp uint32 // file access time spot
+	fileID      uint32 // file id
+	valueSz     uint32
+	valueOffset uint64 // file value offset in data block
+	timeStamp   uint32 // file access time spot
 }
 
 func (e *entry) isNewerThan(old *entry) bool {
@@ -22,5 +23,5 @@ func (e *entry) isNewerThan(old *entry) bool {
 	if old.fileID > e.fileID {
 		return false
 	}
-	return old.offset < e.offset
+	return old.valueOffset < e.valueOffset
 }

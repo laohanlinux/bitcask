@@ -3,9 +3,11 @@ package main
 import (
 	"github.com/laohanlinux/bitcask"
 	"github.com/laohanlinux/go-logger/logger"
+	"os"
 )
 
 func main() {
+	os.RemoveAll("exampleBitcaskDir")
 	bc, err := bitcask.Open("exampleBitcaskDir", nil)
 	if err != nil {
 		logger.Fatal(err)
@@ -13,6 +15,7 @@ func main() {
 	defer bc.Close()
 	k1 := []byte("xiaoMing")
 	v1 := []byte("毕业于新东方推土机学院")
+	logger.Info("v1 length:", len(v1))
 
 	k2 := []byte("zhanSan")
 	v2 := []byte("毕业于新东方厨师学院")
@@ -22,6 +25,7 @@ func main() {
 
 	v1, _ = bc.Get(k1)
 	v2, _ = bc.Get(k2)
+	logger.Info("v1 length:", len(v1))
 	logger.Info(string(k1), string(v1))
 	logger.Info(string(k2), string(v2))
 	// time.Sleep(time.Second * 10)

@@ -129,14 +129,15 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 	}
 
 	fileID := e.fileID
-	logger.Debug("Get FileID:", fileID)
 	bf := bc.getFileState(fileID)
 	if bf == nil {
 		panic(bf)
 	}
 
-	//logger.Info("fileID", fileID, "entry offset:", e.offset, "\t entryLen:", e.entryLen)
-	return bf.read(e.offset, e.entryLen)
+	//TODO
+	// assrt file crc32
+	logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
+	return bf.read(e.valueOffset, e.valueSz)
 }
 
 // Del value by key
@@ -215,12 +216,12 @@ func (bc *BitCask) parseHint(hintFps []*os.File) {
 		fileID, _ := strconv.ParseInt(hintName[s:e], 10, 32)
 
 		for {
+			// parse hint header
 			n, err := fp.ReadAt(b, offset)
 			offset += int64(n)
 			if err != nil && err != io.EOF {
 				panic(err)
 			}
-			//logger.Info("n:", n, err)
 			if err == io.EOF {
 				break
 			}
@@ -229,20 +230,31 @@ func (bc *BitCask) parseHint(hintFps []*os.File) {
 				panic(n)
 			}
 
-			tStamp, ksz, valueSz, valuePos := decodeHint(b)
+			tStamp, ksz, valueSz, valuePos := DecodeHint(b)
 			//logger.Info("ksz:", ksz, "offset:", offset)
 			if ksz+valueSz == 0 { // the record is deleted
 				continue
 			}
+
+			// parse hint key
 			keyByte := make([]byte, ksz)
-			fp.ReadAt(keyByte, offset)
+			n, err = fp.ReadAt(keyByte, offset)
+			if err != nil && err != io.EOF {
+				panic(err)
+			}
+			if err == io.EOF {
+				break
+			}
+			if n != int(ksz) {
+				panic(n)
+			}
 			key := string(keyByte)
 
 			e := &entry{
-				fileID:    uint32(fileID),
-				entryLen:  valueSz,
-				offset:    valuePos,
-				timeStamp: tStamp,
+				fileID:      uint32(fileID),
+				valueSz:     valueSz,
+				valueOffset: valuePos,
+				timeStamp:   tStamp,
 			}
 			offset += int64(ksz)
 			// put entry into keyDirs

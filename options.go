@@ -1,10 +1,12 @@
 package bitcask
 
 const (
-	defaultExpirySecs  = 0
-	defaultMaxFileSize = 1 << 30 // 1G
-	defaultTimeoutSecs = 10
-	defaultMergeSecs   = 180
+	defaultExpirySecs    = 0
+	defaultMaxFileSize   = 1 << 30 // 1G
+	defaultTimeoutSecs   = 10
+	defaultMergeSecs     = 180
+	defaultValueMaxSize  = 1 << 20 // 1m
+	defaultCheckSumCrc32 = false
 )
 
 // Options .
@@ -15,6 +17,8 @@ type Options struct {
 	OpenTimeoutSecs int
 	ReadWrite       bool
 	MergeSecs       int
+	CheckSumCrc32   bool
+	ValueMaxSize    uint64
 }
 
 // NewOptions ...
@@ -41,13 +45,7 @@ func NewOptions(expirySecs int, maxFileSize uint64, openTimeoutSecs, mergeSecs i
 		MaxFileSize:     maxFileSize,
 		ReadWrite:       readWrite,
 		MergeSecs:       mergeSecs,
+		CheckSumCrc32:   defaultCheckSumCrc32,
+		ValueMaxSize:    defaultValueMaxSize,
 	}
-}
-
-// ExpiryTime ...
-func (opt *Options) ExpiryTime() int {
-	if opt.ExpirySecs > 0 {
-
-	}
-	return 0
 }

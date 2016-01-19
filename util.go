@@ -14,6 +14,7 @@ const (
 	mergeHintSuffix = "merge.hint"
 )
 
+// return the merge hint file, if no merge hint file, it will create a new uniquem merge hint file by Unix time stamp
 func getMergeHintFile(bc *BitCask) string {
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
 	if err != nil {
@@ -33,6 +34,7 @@ func getMergeHintFile(bc *BitCask) string {
 	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeHintSuffix)
 }
 
+// return the merge hint file, if no merge data file, it will create a new unique merge data file by Unix time stamp
 func getMergeDataFile(bc *BitCask) string {
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
 	if err != nil {
@@ -53,6 +55,8 @@ func getMergeDataFile(bc *BitCask) string {
 	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeDataSuffix)
 }
 
+// if writeableFile size large than Opts.MaxFileSize and the fileID not equal to local time stamp;
+// if will create a new writeable file
 func checkWriteableFile(bc *BitCask) {
 	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
 		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
@@ -74,6 +78,7 @@ func checkWriteableFile(bc *BitCask) {
 	}
 }
 
+// return the hint file lists
 func listHintFiles(bc *BitCask) ([]string, error) {
 	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
@@ -96,6 +101,7 @@ func listHintFiles(bc *BitCask) ([]string, error) {
 	return hintLists, nil
 }
 
+// return the data file lists
 func listDataFiles(bc *BitCask) ([]string, error) {
 	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
@@ -119,6 +125,7 @@ func listDataFiles(bc *BitCask) ([]string, error) {
 	return dataFileLists, nil
 }
 
+// lock a file by fp locker; the file must exits
 func lockFile(fileName string) (*os.File, error) {
 	return os.OpenFile(fileName, os.O_EXCL|os.O_CREATE|os.O_RDWR, os.ModePerm)
 }
@@ -136,6 +143,7 @@ func writePID(pidFp *os.File, fileID uint32) {
 	pidFp.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\t"+strconv.Itoa(int(fileID))+".data"), 0)
 }
 
+// get file last hint file info
 func lastFileInfo(files []*os.File) (uint32, *os.File) {
 	if files == nil {
 		return uint32(0), nil
@@ -206,7 +214,7 @@ func appendWriteFile(fp *os.File, buf []byte) (int, error) {
 	return fp.WriteAt(buf, stat.Size())
 }
 
-// return a unique file name by timeStamp
+// return a unique not exists file name by timeStamp
 func uniqueFileName(root, suffix string) string {
 	for {
 		tStamp := strconv.Itoa(int(time.Now().Unix()))

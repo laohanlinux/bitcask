@@ -28,13 +28,13 @@ func init() {
 // Merge for bitcask file merge
 type Merge struct {
 	bc           *BitCask
-	Rate         int64
-	mergeOffset  uint64
-	command      string
-	mdFp         *os.File
-	mhFp         *os.File
-	mergedLists  *list.List
-	oldMergeSize int
+	Rate         int64      // worker rate time for merging
+	mergeOffset  uint64     // the being merged data file fp offset
+	command      string     // merge command, not used now
+	mdFp         *os.File   // being merged data file fp
+	mhFp         *os.File   // being merged hint file fp
+	mergedLists  *list.List // has been merged data/hint fileName list
+	oldMergeSize int        // previus merged list size
 }
 
 // NewMerge return a merge single obj
@@ -45,7 +45,7 @@ func NewMerge(bc *BitCask, rate int64) *Merge {
 				bc:           bc,
 				Rate:         rate,
 				mergedLists:  list.New(),
-				oldMergeSize: 2,
+				oldMergeSize: 2, // if just one atctiveable and one writeable data/hint file, need not to merge
 			}
 			mergeDataFile := getMergeDataFile(bitcaskMerge.bc)
 			mergeHintFile := getMergeHintFile(bitcaskMerge.bc)
@@ -126,7 +126,6 @@ func (m *Merge) mergeDataFile(dFile string) error {
 	}
 	defer func() {
 		if dFp != nil {
-			logger.Info("+=================")
 			dFp.Close()
 		}
 	}()
@@ -135,59 +134,72 @@ func (m *Merge) mergeDataFile(dFile string) error {
 	    4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
 	**/
 	buf := make([]byte, HeaderSize)
+	offset := int64(0)
+	logger.Debug("解析的文件是:", dFile)
 	for {
-
-		_, err := dFp.Read(buf)
-		logger.Info("+=================")
+		// parse data header
+		n, err := dFp.ReadAt(buf, offset)
 		if err != nil && err != io.EOF {
-			logger.Info("+=================")
 			return err
 		}
 		if err == io.EOF {
-			logger.Info("+=================")
 			break
 		}
 
+		offset += int64(n)
+		if n != HeaderSize {
+			logger.Fatal(n, "not equal ", HintHeaderSize)
+		}
 		// parse data file
-		_, tStamp, ksz, valuesz, key, value, err := decodeEntryDetail(buf)
-		logger.Info("+=================", string(buf))
+		_, tStamp, ksz, valuesz := DecodeEntryHeader(buf)
+		logger.Info(tStamp, ksz, valuesz)
 		if err != nil {
-			logger.Info("+=================", string(buf))
+			logger.Fatal(err)
 			return err
 		}
 		if ksz+valuesz == 0 {
 			continue
 		}
-		logger.Info("+=================", string(key))
-		if e := keyDirs.get(string(key)); e == nil {
-			logger.Info("+=================")
+		// parse key, value
+		keyValue := make([]byte, ksz+valuesz)
+		n, err = dFp.ReadAt(keyValue, offset)
+		if err != nil && err != io.EOF {
+			logger.Error(err)
+			return err
+		}
+		if err == io.EOF {
+			break
+		}
+		offset += int64(n)
+
+		if e := keyDirs.get(string(keyValue[:ksz])); e == nil {
 			continue
 		} else {
 			if e.timeStamp > tStamp {
 				continue
 			}
 		}
+		// TODO
+		// checkSumCrc32
+
 		// write date file
-		buf := encodeEntry(tStamp, ksz, valuesz, key, value)
+		dataBuf := encodeEntry(tStamp, ksz, valuesz, keyValue[:ksz], keyValue[ksz:])
 		// TODO
 		// assert n
-		n, err := appendWriteFile(m.mdFp, buf)
+		n, err = appendWriteFile(m.mdFp, dataBuf)
 		if err != nil {
 			panic(err)
 		}
-		valuePos := uint64(n) + m.mergeOffset
-		logger.Info("+=================")
+		valueOffset := m.mergeOffset + uint64(HeaderSize+ksz)
+		m.mergeOffset += uint64(n)
 		// write hint file
 		// TODO
 		// assert n
-		buf = encodeHint(tStamp, ksz, valuesz, valuePos, key)
-		n, err = appendWriteFile(m.mhFp, buf)
+		hintBuf := encodeHint(tStamp, ksz, valuesz, valueOffset, keyValue[:ksz])
+		n, err = appendWriteFile(m.mhFp, hintBuf)
 		if err != nil {
 			panic(err)
 		}
-		m.mergeOffset = valuePos
-
-		logger.Info(key, m.mhFp.Name())
 		// check merge data file size
 		if m.mergeOffset > m.bc.Opts.MaxFileSize {
 			m.mdFp.Close()
@@ -262,21 +274,31 @@ func (m *Merge) clearData(mdataFile, mhintFile string) error {
 		if err == io.EOF {
 			break
 		}
-		tStamp, ksz, valueSz, valuePos := decodeHint(buf)
+		tStamp, ksz, valueSz, valueOffset := DecodeHint(buf)
 		if ksz+valueSz == 0 { // the record is deleted
 			continue
 		}
 		keyByte := make([]byte, ksz)
-		hFp.ReadAt(keyByte, off)
+
+		//TODO
+		// assert read function n
+		n, err := hFp.ReadAt(keyByte, off)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if err == io.EOF {
+			break
+		}
+
 		key := string(keyByte)
 
 		e := &entry{
-			fileID:    uint32(fileID),
-			entryLen:  valueSz,
-			offset:    valuePos,
-			timeStamp: tStamp,
+			fileID:      uint32(fileID),
+			valueSz:     valueSz,
+			valueOffset: valueOffset,
+			timeStamp:   tStamp,
 		}
-		off += int64(ksz)
+		off += int64(n)
 		// logger.Info("更新key/value", key, e.fileID)
 		// put entry into keyDirs
 		keyDirs.put(key, e)
@@ -355,7 +377,7 @@ func (m *Merge) clearLastFile() (string, string, error) {
 		if err == io.EOF {
 			break
 		}
-		tStamp, ksz, valueSz, valuePos := decodeHint(buf)
+		tStamp, ksz, valueSz, valuePos := DecodeHint(buf)
 		if ksz+valueSz == 0 { // the record is deleted
 			continue
 		}
@@ -364,10 +386,10 @@ func (m *Merge) clearLastFile() (string, string, error) {
 		key := string(keyByte)
 
 		e := &entry{
-			fileID:    uint32(fileID),
-			entryLen:  valueSz,
-			offset:    valuePos,
-			timeStamp: tStamp,
+			fileID:      uint32(fileID),
+			valueSz:     valueSz,
+			valueOffset: valuePos,
+			timeStamp:   tStamp,
 		}
 		offset += int64(ksz)
 		// put entry into keyDirs

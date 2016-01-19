@@ -7,15 +7,7 @@ import (
 	"time"
 )
 
-// Wead ...
 const (
-	Wrap = iota
-	Fresh
-	Ok
-)
-
-const (
-
 	// HeaderSize : 4 + 4 + 4 + 4
 	/**
 		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
@@ -114,14 +106,17 @@ func openBFile(dirName string, tStamp int) *BFile {
 func (bf *BFile) read(offset uint64, length uint32) ([]byte, error) {
 	/**
 		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
-		4 		:	4 		: 	4 	: 		4	:	xxxx	: xxxx
+		4	:		 4	:		4:		4	:	xxxx	: xxxx
 	**/
-	header := make([]byte, length)
+	value := make([]byte, length)
 	//TODO
 	// assert read function and crc32
 	bf.fp.Seek(int64(offset), 0)
-	bf.fp.Read(header)
-	return decodeEntry(header)
+	_, err := bf.fp.Read(value)
+	if err != nil {
+		return nil, err
+	}
+	return value, err
 }
 
 // including writing data file and hint file
@@ -131,12 +126,9 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 	keySize := uint32(len(key))
 	valueSize := uint32(len(value))
 	vec := encodeEntry(timeStamp, keySize, valueSize, key, value)
-	//logger.Info(len(vec), keySize, valueSize)
 	entrySize := HeaderSize + keySize + valueSize
-	// TODO
-	// race data
-	entryPos := bf.writeOffset
 
+	valueOffset := bf.writeOffset + uint64(HeaderSize+keySize)
 	// write data file into disk
 	// TODO
 	// assert WriteAt function
@@ -145,9 +137,9 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 		panic(err)
 	}
 	//logger.Debug("has write into data file:", n)
-	// 2. write hint file disk
-	hintData := encodeHint(timeStamp, keySize, entrySize, entryPos, key)
 
+	// 2. write hint file disk
+	hintData := encodeHint(timeStamp, keySize, valueSize, valueOffset, key)
 	// TODO
 	// assert write function
 	_, err = appendWriteFile(bf.hintFp, hintData)
@@ -158,10 +150,10 @@ func (bf *BFile) writeDatat(key []byte, value []byte) (entry, error) {
 	bf.writeOffset += uint64(entrySize)
 
 	return entry{
-		fileID:    bf.fileID,
-		entryLen:  entrySize,
-		offset:    entryPos,
-		timeStamp: timeStamp,
+		fileID:      bf.fileID,
+		valueSz:     valueSize,
+		valueOffset: valueOffset,
+		timeStamp:   timeStamp,
 	}, nil
 }
 
@@ -175,8 +167,7 @@ func (bf *BFile) del(key []byte) error {
 	entrySize := HeaderSize + keySize + valueSize
 	// TODO
 	// race data
-	entryPos := bf.writeOffset
-
+	valueOffset := bf.writeOffset + uint64(HeaderSize+keySize)
 	// write data file into disk
 	// TODO
 	// assert WriteAt function
@@ -187,7 +178,7 @@ func (bf *BFile) del(key []byte) error {
 
 	//logger.Debug("has write into data file:", n)
 	// 2. write hint file disk
-	hintData := encodeHint(timeStamp, keySize, entrySize, entryPos, key)
+	hintData := encodeHint(timeStamp, keySize, valueSize, valueOffset, key)
 
 	// TODO
 	// assert write function
