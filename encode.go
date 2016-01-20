@@ -29,6 +29,7 @@ func encodeEntry(tStamp, keySize, valueSize uint32, key, value []byte) []byte {
 	return buf
 }
 
+// DecodeEntry ...
 func DecodeEntry(buf []byte) ([]byte, error) {
 	/**
 	    crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
@@ -47,6 +48,7 @@ func DecodeEntry(buf []byte) ([]byte, error) {
 	return value, nil
 }
 
+// DecodeEntryHeader ...
 func DecodeEntryHeader(buf []byte) (uint32, uint32, uint32, uint32) {
 	/**
 		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
@@ -59,6 +61,8 @@ func DecodeEntryHeader(buf []byte) (uint32, uint32, uint32, uint32) {
 	return c32, tStamp, ksz, valuesz
 }
 
+
+// DecodeEntryDetail ...
 func DecodeEntryDetail(buf []byte) (uint32, uint32, uint32, uint32, []byte, []byte, error) {
 	/**
 		crc32	:	tStamp	:	ksz	:	valueSz	:	key	:	value
@@ -98,6 +102,7 @@ func encodeHint(tStamp, ksz, valueSz uint32, valuePos uint64, key []byte) []byte
 	return buf
 }
 
+// DecodeHint ...
 func DecodeHint(buf []byte) (uint32, uint32, uint32, uint64) {
 	/**
 	    tStamp	:	ksz	:	valueSz	:	valuePos	:	key

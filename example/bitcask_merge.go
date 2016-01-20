@@ -45,6 +45,7 @@ func main() {
 	}
 
 	logger.Info("Put all Data")
+	time.Sleep(time.Second * 30)
 	for i := 0; i < (1<<10)*5; i++ {
 		k := strconv.Itoa(i)
 		v, _ := bc.Get([]byte(k))

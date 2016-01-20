@@ -4,8 +4,8 @@ package bitcask
 // 4 * 4 + 64 = 80Bit
 type entry struct {
 	fileID      uint32 // file id
-	valueSz     uint32
-	valueOffset uint64 // file value offset in data block
+	valueSz     uint32 // value size in data block
+	valueOffset uint64 // value offset in data block
 	timeStamp   uint32 // file access time spot
 }
 

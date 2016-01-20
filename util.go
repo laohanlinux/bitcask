@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"github.com/laohanlinux/go-logger/logger"
 )
 
 const (
@@ -59,7 +60,7 @@ func getMergeDataFile(bc *BitCask) string {
 // if will create a new writeable file
 func checkWriteableFile(bc *BitCask) {
 	if bc.writeFile.writeOffset > bc.Opts.MaxFileSize && bc.writeFile.fileID != uint32(time.Now().Unix()) {
-		//logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.maxFileSize)
+		logger.Info("open a new data/hint file:", bc.writeFile.writeOffset, bc.Opts.MaxFileSize)
 		//close data/hint fp
 		bc.writeFile.hintFp.Close()
 		bc.writeFile.fp.Close()

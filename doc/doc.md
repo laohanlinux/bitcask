@@ -33,3 +33,24 @@ bitcask的主要数据结构由两个 `keyDirs`和`activeFiles` ; 合并步骤�
 文件的删除标志由ksz 和 valuesz 决定
 
 如果ksz 和 valuesz 都为0，则表示该记录的操作是删除的操作。
+
+- sync.open_timeout  
+
+```
+none — lets the operating system manage syncing writes (default)
+o_sync — uses the O_SYNC flag, which forces syncs on every write
+Time interval — Riak will force Bitcask to sync at specified intervals
+```
+
+-- merge Policy 
+
+```
+always — No restrictions on when merge operations can occur (default)
+never — Merge will never be attempted
+window — Merge operations occur during specified hours
+```
+
+```
+windows.start = 3 
+windows.end = 7
+```
