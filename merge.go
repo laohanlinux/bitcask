@@ -34,6 +34,7 @@ type Merge struct {
 	mdFp         *os.File   // being merged data file fp
 	mhFp         *os.File   // being merged hint file fp
 	mergedLists  *list.List // has been merged data/hint fileName list
+    newDataHintLists *list.List // 
 	oldMergeSize int        // previus merged list size
 }
 
@@ -47,14 +48,14 @@ func NewMerge(bc *BitCask, rate int64) *Merge {
 				mergedLists:  list.New(),
 				oldMergeSize: 2, // if just one atctiveable and one writeable data/hint file, need not to merge
 			}
-			mergeDataFile := getMergeDataFile(bitcaskMerge.bc)
-			mergeHintFile := getMergeHintFile(bitcaskMerge.bc)
-			mdFp, err := os.OpenFile(mergeDataFile, os.O_RDWR|os.O_CREATE, 0755)
+			mergingDataFile := getMergingDataFile(bitcaskMerge.bc)
+			mergingHintFile := getMergingHintFile(bitcaskMerge.bc)
+			mdFp, err := os.OpenFile(mergingDataFile, os.O_RDWR|os.O_CREATE, 0755)
 			if err != nil {
 				logger.Error(err)
 				return
 			}
-			mhFp, err := os.OpenFile(mergeHintFile, os.O_RDWR|os.O_CREATE, 0755)
+			mhFp, err := os.OpenFile(mergingHintFile, os.O_RDWR|os.O_CREATE, 0755)
 			if err != nil {
 				logger.Error(err)
 				return
@@ -105,6 +106,7 @@ func (m *Merge) work() {
 					hf: dataFileLists[i][:idx] + ".hint",
 				})
 			}
+            
 			// TODO
 			// rollback merge
 			_, _, err = m.clearLastFile()
@@ -118,6 +120,8 @@ func (m *Merge) work() {
 }
 
 func (m *Merge) mergeDataFile(dFile string) error {
+    // maybe check dFile is need to clear 
+    //TODO 
 
 	dFp, err := os.OpenFile(m.bc.dirFile+"/"+dFile, os.O_RDONLY, 0755)
 	if err != nil {
@@ -207,13 +211,13 @@ func (m *Merge) mergeDataFile(dFile string) error {
 			// rename merge data/hint file
 			mergeDataFile := m.mdFp.Name()
 			mergeHintFile := m.mhFp.Name()
-			uniqueDataFile := uniqueFileName(m.bc.dirFile, "data")
-			uniqueHintFile := uniqueFileName(m.bc.dirFile, "hint")
+			uniqueDataFile := uniqueFileName(m.bc.dirFile, mergeDataSuffix)
+			uniqueHintFile := uniqueFileName(m.bc.dirFile, mergeHintFile)
 			os.Rename(mergeDataFile, m.bc.dirFile+"/"+uniqueDataFile)
 			os.Rename(mergeHintFile, m.bc.dirFile+"/"+uniqueHintFile)
 			// create new merge data/hint file
-			mergeDataFile = getMergeDataFile(m.bc)
-			mergeHintFile = getMergeHintFile(m.bc)
+			mergeDataFile = getMergingDataFile(m.bc)
+			mergeHintFile = getMergingHintFile(m.bc)
 			mdFp, err := os.OpenFile(mergeDataFile, os.O_RDWR|os.O_CREATE, 0755)
 			if err != nil {
 				return err
@@ -224,12 +228,6 @@ func (m *Merge) mergeDataFile(dFile string) error {
 			}
 			m.mdFp, m.mhFp = mdFp, mhFp
 			m.mergeOffset = 0
-
-			// clear old data/hint file
-			if err := m.clearData(uniqueDataFile, uniqueHintFile); err != nil {
-				return err
-			}
-
 		}
 	}
 	return nil
@@ -335,6 +333,7 @@ func (m *Merge) clearData(mdataFile, mhintFile string) error {
 func (m *Merge) clearLastFile() (string, string, error) {
 	m.mdFp.Close()
 	m.mhFp.Close()
+    m.mergeOffset = 0
 	// rename merge data/hint file
 	mergeDataFile := m.mdFp.Name()
 	mergeHintFile := m.mhFp.Name()
@@ -347,20 +346,19 @@ func (m *Merge) clearLastFile() (string, string, error) {
 	if err := os.Rename(mergeHintFile, m.bc.dirFile+"/"+uniqueHintFile); err != nil {
 		panic(err)
 	}
-
-	// create new merge data/hint file
-	mergeDataFile = getMergeDataFile(m.bc)
-	mergeHintFile = getMergeHintFile(m.bc)
-	mdFp, err := os.OpenFile(mergeDataFile, os.O_RDONLY|os.O_CREATE, 0755)
-	if err != nil {
-		return uniqueDataFile, uniqueHintFile, err
-	}
-	mhFp, err := os.OpenFile(mergeHintFile, os.O_RDONLY|os.O_CREATE, 0755)
-	if err != nil {
-		return uniqueDataFile, uniqueHintFile, err
-	}
-	m.mdFp, m.mhFp = mdFp, mhFp
-	m.mergeOffset = 0
+	// // create new merge data/hint file
+	// mergeDataFile = getMergeDataFile(m.bc)
+	// mergeHintFile = getMergeHintFile(m.bc)
+	// mdFp, err := os.OpenFile(mergeDataFile, os.O_RDONLY|os.O_CREATE, 0755)
+	// if err != nil {
+	// 	return uniqueDataFile, uniqueHintFile, err
+	// }
+	// mhFp, err := os.OpenFile(mergeHintFile, os.O_RDONLY|os.O_CREATE, 0755)
+	// if err != nil {
+	// 	return uniqueDataFile, uniqueHintFile, err
+	// }
+	// m.mdFp, m.mhFp = mdFp, mhFp
+	// m.mergeOffset = 0
 
 	// update data/hint record for keyDirs and activeable files
 	offset := int64(0)

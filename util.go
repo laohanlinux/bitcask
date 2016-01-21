@@ -11,9 +11,50 @@ import (
 
 const (
 	lockFileName    = "bitcask.lock"
+    mergeBasePath   = "mergebase"
 	mergeDataSuffix = "merge.data"
 	mergeHintSuffix = "merge.hint"
+    mergingDataSuffix = mergeDataSuffix + ".tmp"
+    mergingHintSuffix = mergeHintSuffix + ".tmp"
 )
+
+func getMergingHintFile(bc *BitCask) string { 
+    dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+	if err != nil {
+		panic(err)
+	}
+	defer dirFp.Close()
+	fileLists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range fileLists {
+		if strings.HasSuffix(file, mergingHintSuffix) {
+			return file
+		}
+	}
+	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergingHintSuffix)
+}
+
+func getMergingDataFile(bc *BitCask) string { 
+    dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+	if err != nil {
+		panic(err)
+	}
+	defer dirFp.Close()
+	fileLists, err := dirFp.Readdirnames(-1)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range fileLists {
+		if strings.HasSuffix(file, mergingDataSuffix) {
+			return file
+		}
+	}
+	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergingDataSuffix)
+}
 
 // return the merge hint file, if no merge hint file, it will create a new uniquem merge hint file by Unix time stamp
 func getMergeHintFile(bc *BitCask) string {

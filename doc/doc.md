@@ -24,10 +24,13 @@
 
 bitcask的主要数据结构由两个 `keyDirs`和`activeFiles` ; 合并步骤：
 
-- 找出需要合并的文件[f1, f2, f3, f4] 
+- 清空脏数据
 
-- f1 合并；如果合并的文件已经大于最大的文件设置，则产生新的`data/hint`文件
+- 1.找出需要合并的文件[f1, f2, f3, f4] 
 
+- 2.f1 合并；如果合并的文件已经大于最大的文件设置，则产生新的`data/hint`文件
+
+- 依次合并 
 ## 其他参数说明
 
 文件的删除标志由ksz 和 valuesz 决定
@@ -42,7 +45,7 @@ o_sync — uses the O_SYNC flag, which forces syncs on every write
 Time interval — Riak will force Bitcask to sync at specified intervals
 ```
 
--- merge Policy 
+- merge Policy 
 
 ```
 always — No restrictions on when merge operations can occur (default)
@@ -54,3 +57,21 @@ window — Merge operations occur during specified hours
 windows.start = 3 
 windows.end = 7
 ```
+
+- Merge Interval
+
+```
+merge_check_interval = 3m
+```
+
+- Fold Keys Threshold
+
+```
+max_age = 0.5s
+max_puts = 1000
+```
+
+- Automatic Expiration
+
+`not impleted`
+
