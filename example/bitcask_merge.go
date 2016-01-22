@@ -31,49 +31,36 @@ func main() {
 	mergeWorker := bitcask.NewMerge(bc, 5)
 	mergeWorker.Start()
 
-	keyValues := make(map[int]string)
+	size := (1 << 13)
+	for i := 0; i < size; i++ {
+		if i%1024 == 0 {
+			time.Sleep(time.Second * 1)
+		}
+		key := strconv.Itoa(i)
+		bc.Put([]byte(key), []byte(key))
+	}
 
-	for j := 0; j < 5; j++ {
-		for i := 0; i < (1<<10)*5; i++ {
-			key := strconv.Itoa(i + j*(1<<10))
-			value := strconv.Itoa(int(time.Now().Unix()))
+	time.Sleep(time.Second * 1)
+	for i := 0; i < size; i++ {
+		if i%2 == 0 {
+			key := strconv.Itoa(i)
+			value := strconv.Itoa(i + 1)
 			bc.Put([]byte(key), []byte(value))
-			keyValues[i] = value
-			//logger.Info(i)
-		}
-		time.Sleep(time.Second * 1)
-	}
-
-	logger.Info("Put all Data")
-	time.Sleep(time.Second * 30)
-	for i := 0; i < (1<<10)*5; i++ {
-		k := strconv.Itoa(i)
-		v, _ := bc.Get([]byte(k))
-		if string(v) != keyValues[i] {
-			logger.Error(string(v), keyValues[i])
-			os.Exit(-1)
 		}
 	}
-	// logger.Info("Get all data")
-	// // delete all data
-	// for i := 0; i < (1<<10)*5; i++ {
-	// 	k := strconv.Itoa(i)
-	// 	//v, _ := bc.Get([]byte(k))
-	// 	err := bc.Del([]byte(k))
-	// 	if err != nil {
-	// 		logger.Error(err)
-	// 	}
-	// }
-	// logger.Info("Delete all data")
-	// // Get all data
-	// for i := 0; i < b.N/2; i++ {
-	// 	k := strconv.Itoa(i)
-	// 	v, err := bc.Get([]byte(k))
-	// 	if err != ErrNotFound {
-	// 		logger.Error(string(v), keyValues[i])
-	// 	}
-	// }
-	// logger.Info("all data is not found")
 
+	for i := 0; i < size; i++ {
+		value_ := i
+		if i%2 == 0 {
+			value_ = i + 1
+		}
+		key := strconv.Itoa(i)
+
+		value, _ := bc.Get([]byte(key))
+		if string(value) != strconv.Itoa(value_) {
+			logger.Error("value:", string(value), "value_:", strconv.Itoa(value_))
+		}
+
+	}
 	time.Sleep(time.Second * 120)
 }

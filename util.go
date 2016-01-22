@@ -6,20 +6,21 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/laohanlinux/go-logger/logger"
 )
 
 const (
-	lockFileName    = "bitcask.lock"
-    mergeBasePath   = "mergebase"
-	mergeDataSuffix = "merge.data"
-	mergeHintSuffix = "merge.hint"
-    mergingDataSuffix = mergeDataSuffix + ".tmp"
-    mergingHintSuffix = mergeHintSuffix + ".tmp"
+	lockFileName      = "bitcask.lock"
+	mergeBasePath     = "mergebase"
+	mergeDataSuffix   = "merge.data"
+	mergeHintSuffix   = "merge.hint"
+	mergingDataSuffix = mergeDataSuffix + ".tmp"
+	mergingHintSuffix = mergeHintSuffix + ".tmp"
 )
 
-func getMergingHintFile(bc *BitCask) string { 
-    dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+func getMergingHintFile(bc *BitCask) string {
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -37,8 +38,8 @@ func getMergingHintFile(bc *BitCask) string {
 	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergingHintSuffix)
 }
 
-func getMergingDataFile(bc *BitCask) string { 
-    dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
+func getMergingDataFile(bc *BitCask) string {
+	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -145,7 +146,7 @@ func listHintFiles(bc *BitCask) ([]string, error) {
 
 // return the data file lists
 func listDataFiles(bc *BitCask) ([]string, error) {
-	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
+	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, mergingDataSuffix, mergingHintSuffix, lockFileName}
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
 	if err != nil {
 		return nil, err

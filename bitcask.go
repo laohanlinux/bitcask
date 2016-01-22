@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/laohanlinux/go-logger/logger"
+	//	"github.com/laohanlinux/go-logger/logger"
 )
 
 // ErrNotFound ...
@@ -136,7 +136,7 @@ func (bc *BitCask) Get(key []byte) ([]byte, error) {
 
 	//TODO
 	// assrt file crc32
-	logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
+	//logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
 	return bf.read(e.valueOffset, e.valueSz)
 }
 

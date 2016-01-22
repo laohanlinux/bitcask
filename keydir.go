@@ -40,6 +40,10 @@ func (keyDirs *KeyDirs) put(key string, e *entry) {
 
 	old, ok := keyDirs.entrys[key]
 	if !ok || e.isNewerThan(old) {
+		if old != nil {
+			//logger.Info("update key/value", old.fileID, e.fileID)
+		}
+
 		keyDirs.entrys[key] = e
 		return
 	}
