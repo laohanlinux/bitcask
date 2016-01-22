@@ -9,19 +9,25 @@ type entry struct {
 	timeStamp   uint32 // file access time spot
 }
 
+// if all attr equal to old entry, return false
 func (e *entry) isNewerThan(old *entry) bool {
 	if old.timeStamp < e.timeStamp {
 		return true
-	}
-	if old.timeStamp > e.timeStamp {
+	} else if old.timeStamp > e.timeStamp {
 		return false
 	}
 
 	if old.fileID < e.fileID {
 		return true
-	}
-	if old.fileID > e.fileID {
+	} else if old.fileID > e.fileID {
 		return false
 	}
-	return old.valueOffset < e.valueOffset
+
+	if old.valueOffset < e.valueOffset {
+		return true
+	} else if old.valueOffset > e.valueOffset {
+		return false
+	}
+
+	return false
 }
