@@ -89,10 +89,10 @@ func newBFile() *BFile {
 	return &BFile{}
 }
 
-func openBFile(dirName string, tStamp int) *BFile {
+func openBFile(dirName string, tStamp int) (*BFile, error) {
 	fp, err := os.OpenFile(dirName+"/"+strconv.Itoa(tStamp)+".data", os.O_RDONLY, os.ModePerm)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return &BFile{
@@ -100,7 +100,7 @@ func openBFile(dirName string, tStamp int) *BFile {
 		fp:          fp,
 		hintFp:      nil,
 		writeOffset: 0,
-	}
+	}, nil
 }
 
 func (bf *BFile) read(offset uint64, length uint32) ([]byte, error) {

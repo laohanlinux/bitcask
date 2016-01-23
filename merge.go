@@ -19,6 +19,7 @@ package bitcask
 
 import (
 	"container/list"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -45,11 +46,12 @@ func init() {
 // Merge for bitcask file merge
 type Merge struct {
 	bc               *BitCask
-	Rate             int64      // worker rate time for merging
-	mergeOffset      uint64     // the being merged data file fp offset
-	command          string     // merge command, not used now
-	mdFp             *os.File   // being merged data file fp
-	mhFp             *os.File   // being merged hint file fp
+	Rate             int64    // worker rate time for merging
+	mergeOffset      uint64   // the being merged data file fp offset
+	command          string   // merge command, not used now
+	mdFp             *os.File // being merged data file fp
+	mhFp             *os.File // being merged hint file fp
+	firstFileID      uint32
 	mergedLists      *list.List // has been merged data/hint fileName list
 	newDataHintLists *list.List //
 	oldMergeSize     int        // previus merged list size
@@ -66,20 +68,9 @@ func NewMerge(bc *BitCask, rate int64) *Merge {
 				newDataHintLists: list.New(),
 				oldMergeSize:     2, // if just one atctiveable and one writeable data/hint file, need not to merge
 			}
-			mergingDataFile := getMergingDataFile(bitcaskMerge.bc)
-			mergingHintFile := getMergingHintFile(bitcaskMerge.bc)
-			mdFp, err := os.OpenFile(mergingDataFile, os.O_RDWR|os.O_CREATE, 0755)
-			if err != nil {
-				logger.Error(err)
-				return
-			}
-			mhFp, err := os.OpenFile(mergingHintFile, os.O_RDWR|os.O_CREATE, 0755)
-			if err != nil {
-				logger.Error(err)
-				return
-			}
-			bitcaskMerge.mdFp, bitcaskMerge.mhFp = mdFp, mhFp
 		}
+		// clear all old merged file
+
 	})
 	return bitcaskMerge
 }
@@ -124,12 +115,14 @@ func (m *Merge) work() {
 					hf: dataFileLists[i][:idx] + ".hint",
 				})
 			}
-			// rename the mergingDataFile/mergingHintFile,
-			// if their size > 0
-			if err := m.updateMergingFiles(); err != nil {
+			// rename the mergingDataFile/mergingHintFile
+			if err := m.updateMergingFiles(0); err != nil {
 				logger.Error(err)
 				goto tryAgain
 			}
+
+			m.removeOldFiles()
+			// update merge size
 
 			for {
 				iterm := m.newDataHintLists.Front()
@@ -150,12 +143,8 @@ func (m *Merge) work() {
 				iterm.Value = nil
 				iterm = nIterm
 			}
-			m.newDataHintLists = nil
 
-			m.removeOldFiles()
-			// update merge size
 			m.oldMergeSize = len(dataFileLists)
-
 		tryAgain:
 		}
 	}
@@ -170,13 +159,25 @@ func (m *Merge) mergeDataFile(dFile string) error {
 		return err
 	}
 	defer dFp.Close()
+	idx := strings.LastIndex(dFile, ".data")
+	baseTime, _ := strconv.Atoi(dFile[:idx])
+	if m.mdFp == nil {
+		mergingDataFile := getMergingDataFile(m.bc, baseTime)
+		mergingHintFile := getMergingHintFile(m.bc, baseTime)
+		mdFp, err := os.OpenFile(mergingDataFile, os.O_RDWR|os.O_CREATE, 0755)
+		if err != nil {
+			return err
+		}
+		mhFp, err := os.OpenFile(mergingHintFile, os.O_RDWR|os.O_CREATE, 0755)
+		if err != nil {
+			return err
+		}
+		m.mdFp, m.mhFp = mdFp, mhFp
+		m.mergeOffset = 0
+		m.firstFileID = uint32(baseTime)
+	}
 
 	//TODO
-	mergeDataFileName := m.mdFp.Name()
-
-	idx := strings.LastIndex(mergeDataFileName, ".data")
-	mergeFileID, _ := strconv.Atoi(mergeDataFileName[:idx])
-
 	buf := make([]byte, HeaderSize)
 	offset := int64(0)
 	logger.Debug("解析的文件是:", dFile)
@@ -215,17 +216,31 @@ func (m *Merge) mergeDataFile(dFile string) error {
 		if err == io.EOF {
 			break
 		}
-		//logger.Info("t:", tStamp, "ksz:", ksz, "valuesz:", valuesz, "key:", string(keyValue[:ksz]), "value:", string(keyValue[ksz:]))
+		valueOff := uint64(offset + int64(ksz))
 		offset += int64(n)
+		//logger.Info("t:", tStamp, "ksz:", ksz, "valuesz:", valuesz, "key:", string(keyValue[:ksz]), "value:", string(keyValue[ksz:]))
 
 		// the record is deleted
 		if e := keyDirs.get(string(keyValue[:ksz])); e == nil {
 			continue
 		} else {
-			if e.timeStamp > tStamp {
+			// 因为相同的时间戳会在同一个文件里面，所以时间戳一样，只要比较偏移值即可
+			eTmp := entry{
+				fileID:      uint32(baseTime),
+				timeStamp:   tStamp,
+				valueOffset: valueOff,
+			}
+			if e.isNewerThan(&eTmp) && string(keyValue[:ksz]) == "53" {
 				logger.Debug("过滤:", e.timeStamp)
 				logger.Info("t:", tStamp, "ksz:", ksz, "valuesz:", valuesz, "key:", string(keyValue[:ksz]), "value:", string(keyValue[ksz:]))
 				continue
+			}
+		}
+
+		// check merge data file size
+		if m.mergeOffset > m.bc.Opts.MaxFileSize*100 && tStamp > m.firstFileID {
+			if err = m.updateMergingFiles(tStamp); err != nil {
+				return err
 			}
 		}
 
@@ -249,75 +264,81 @@ func (m *Merge) mergeDataFile(dFile string) error {
 		if err != nil {
 			panic(err)
 		}
-		// check merge data file size
-		if m.mergeOffset > m.bc.Opts.MaxFileSize*100 && mergeFileID != int(time.Now().Unix()) {
-			if err = m.updateMergingFiles(); err != nil {
-				return err
-			}
-
-			idx = strings.LastIndex(m.mdFp.Name(), ".data")
-			mergeFileID, _ = strconv.Atoi(m.mdFp.Name()[:idx])
-		}
 	}
 	return nil
 }
 
-// update merging data/hint file
-func (m *Merge) updateMergingFiles() error {
+// update merging data/hint file, return a new merging data/hint file with newFileID name
+func (m *Merge) updateMergingFiles(newFileID uint32) error {
+	mergingDataFile := m.mdFp.Name()
+	mergingHintFile := m.mhFp.Name()
+	logger.Debug("====>", mergingDataFile, mergingHintFile)
 	m.mdFp.Close()
 	m.mhFp.Close()
-	mergeDataFile := m.mdFp.Name()
-	mergeHintFile := m.mhFp.Name()
-	uniqueDataFile := uniqueFileName(m.bc.dirFile, mergeDataSuffix)
-	uniqueHintFile := uniqueFileName(m.bc.dirFile, mergeHintSuffix)
-	if err := os.Rename(mergeDataFile, m.bc.dirFile+"/"+uniqueDataFile); err != nil {
+	idx := strings.LastIndex(mergingDataFile, "."+mergingDataSuffix)
+	mergeDataFile := mergingDataFile[:idx] + "." + mergeDataSuffix
+	mergeHintFile := mergingDataFile[:idx] + "." + mergeHintSuffix
+	logger.Debug(mergeHintFile, mergeDataFile)
+	if err := os.Rename(mergingDataFile, mergeDataFile); err != nil {
 		return err
 	}
-	if err := os.Rename(mergeHintFile, m.bc.dirFile+"/"+uniqueHintFile); err != nil {
+	if err := os.Rename(mergingHintFile, mergeHintFile); err != nil {
 		return err
 	}
-
 	m.newDataHintLists.PushFront(struct {
 		mergeDataFile string
 		mergeHintFile string
 	}{
-		mergeDataFile: uniqueDataFile,
-		mergeHintFile: uniqueHintFile,
+		mergeDataFile: mergeDataFile,
+		mergeHintFile: mergeHintFile,
 	})
 
-	// create new merge data/hint file
-	mdFp, err := os.OpenFile(getMergingDataFile(m.bc), os.O_RDWR|os.O_CREATE, 0755)
+	if newFileID == 0 {
+		m.mdFp, m.mhFp = nil, nil
+		m.mergeOffset = 0
+		m.firstFileID = 0
+		return nil
+	}
+	mdName := fmt.Sprintf("%s/%d.%s", m.bc.dirFile, newFileID, mergingDataSuffix)
+	mhName := fmt.Sprintf("%s/%d.%s", m.bc.dirFile, newFileID, mergingHintSuffix)
+	mdFp, err := os.OpenFile(mdName, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
-	mhFp, err := os.OpenFile(getMergingHintFile(m.bc), os.O_RDWR|os.O_CREATE, 0755)
+	mhFp, err := os.OpenFile(mhName, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
 	m.mdFp, m.mhFp = mdFp, mhFp
 	m.mergeOffset = 0
+	m.firstFileID = newFileID
 	return nil
 }
 
 func (m *Merge) updateHintFile(dFile, hFile string) error {
 	idx := strings.LastIndex(hFile, "."+mergeHintSuffix)
+	logger.Info(dFile, hFile)
 	logger.Info("The Hint File:", hFile, hFile[:idx])
 
 	//rename mdfile/mhfile to normal fort data/hint file
 	//rg:123413123.merge.hint => 123412123.hint
-	if err := os.Rename(m.bc.dirFile+"/"+dFile, m.bc.dirFile+"/"+hFile[:idx]+".data"); err != nil {
+	if err := os.Rename(dFile, hFile[:idx]+".data"); err != nil {
 		return err
 	}
-	if err := os.Rename(m.bc.dirFile+"/"+hFile, m.bc.dirFile+"/"+hFile[:idx]+".hint"); err != nil {
+	if err := os.Rename(hFile, hFile[:idx]+".hint"); err != nil {
 		return err
 	}
 
 	hFile = hFile[:idx] + ".hint"
 	logger.Info("The Hint File:", hFile)
-	idx = strings.LastIndex(hFile, ".hint")
-	fileID, _ := strconv.Atoi(hFile[:idx])
+	idx1 := strings.LastIndex(hFile, "/")
+	idx2 := strings.LastIndex(hFile, ".hint")
+	fileID, err := strconv.Atoi(hFile[idx1+1 : idx2])
+	if err != nil {
+		panic(err)
+	}
 
-	hFp, err := os.OpenFile(m.bc.dirFile+"/"+hFile, os.O_RDONLY, 0755)
+	hFp, err := os.OpenFile(hFile, os.O_RDONLY, 0755)
 	if err != nil {
 		return err
 	}
@@ -347,6 +368,9 @@ func (m *Merge) updateHintFile(dFile, hFile string) error {
 		offset += int64(n)
 		hFp.ReadAt(keyByte, offset)
 		key := string(keyByte)
+		if key == "53" {
+			logger.Error(string(key), "被更新到文件:", hFile, dFile, "中.")
+		}
 		//logger.Warn("hFile:", hFile, "fid:", fileID, "t:", tStamp, "ksz:", ksz, "valuesz:", valueSz, "valueOffset:", valueOffset, "key:", key)
 
 		e := &entry{
@@ -358,7 +382,8 @@ func (m *Merge) updateHintFile(dFile, hFile string) error {
 		offset += int64(ksz)
 
 		// put entry into keyDirs
-		logger.Info("更新key/value in merge function", key, e.fileID)
+		//logger.Info("更新key/value in merge function", key, e.fileID)
+		//keyDirs.setCompare(key, e)
 		keyDirs.put(key, e)
 	}
 	return nil
@@ -394,5 +419,5 @@ func (m *Merge) removeOldFiles() {
 		}
 		logger.Info("remove old hintfile:", fileID, value.hf)
 	}
-	m.mergedLists = nil
+
 }

@@ -19,42 +19,24 @@ const (
 	mergingHintSuffix = mergeHintSuffix + ".tmp"
 )
 
-func getMergingHintFile(bc *BitCask) string {
-	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
-	if err != nil {
-		panic(err)
-	}
-	defer dirFp.Close()
-	fileLists, err := dirFp.Readdirnames(-1)
-	if err != nil {
-		panic(err)
-	}
+func getMergingHintFile(bc *BitCask, baseTime int) string {
+	mergingHintFile := bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingHintSuffix
 
-	for _, file := range fileLists {
-		if strings.HasSuffix(file, mergingHintSuffix) {
-			return file
-		}
+	_, err := os.Stat(mergingHintFile)
+	if os.IsNotExist(err) {
+		return mergingHintFile
 	}
-	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergingHintSuffix)
+	return bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingHintSuffix
 }
 
-func getMergingDataFile(bc *BitCask) string {
-	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
-	if err != nil {
-		panic(err)
-	}
-	defer dirFp.Close()
-	fileLists, err := dirFp.Readdirnames(-1)
-	if err != nil {
-		panic(err)
-	}
+func getMergingDataFile(bc *BitCask, baseTime int) string {
+	mergingDataFile := bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingDataSuffix
 
-	for _, file := range fileLists {
-		if strings.HasSuffix(file, mergingDataSuffix) {
-			return file
-		}
+	_, err := os.Stat(mergingDataFile)
+	if os.IsNotExist(err) {
+		return mergingDataFile
 	}
-	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergingDataSuffix)
+	return bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingDataSuffix
 }
 
 // return the merge hint file, if no merge hint file, it will create a new uniquem merge hint file by Unix time stamp

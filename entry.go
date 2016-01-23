@@ -31,3 +31,19 @@ func (e *entry) isNewerThan(old *entry) bool {
 
 	return false
 }
+
+// for merging
+func (e *entry) isNewerThan1(old *entry) bool {
+	if old.timeStamp < e.timeStamp {
+		return true
+	} else if old.timeStamp > e.timeStamp {
+		return false
+	}
+
+	if old.valueOffset < e.valueOffset {
+		return true
+	} else if old.valueOffset > e.valueOffset {
+		return false
+	}
+	return true
+}

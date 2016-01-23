@@ -56,9 +56,9 @@ func main() {
 		}
 		key := strconv.Itoa(i)
 
-		value, _ := bc.Get([]byte(key))
+		value, err := bc.Get([]byte(key))
 		if string(value) != strconv.Itoa(value_) {
-			logger.Error("value:", string(value), "value_:", strconv.Itoa(value_))
+			logger.Error("value:", string(value), "value_:", strconv.Itoa(value_), err)
 		}
 
 	}

@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/laohanlinux/go-logger/logger"
 
 	//	"github.com/laohanlinux/go-logger/logger"
 )
@@ -121,23 +124,30 @@ func (bc *BitCask) Put(key []byte, value []byte) error {
 
 // Get ...
 func (bc *BitCask) Get(key []byte) ([]byte, error) {
-	bc.rwLock.RLock()
-	defer bc.rwLock.RUnlock()
-	e := keyDirs.get(string(key))
-	if e == nil {
-		return nil, ErrNotFound
+	// bc.rwLock.RLock()
+	// defer bc.rwLock.RUnlock()
+
+	for {
+		e := keyDirs.get(string(key))
+		if e == nil {
+			return nil, ErrNotFound
+		}
+
+		fileID := e.fileID
+		bf, err := bc.getFileState(fileID)
+		if err != nil && os.IsNotExist(err) {
+			logger.Warn("key:", string(key), "=>the file is not exits:", fileID)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		//TODO
+		// assrt file crc32
+		//logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
+		return bf.read(e.valueOffset, e.valueSz)
 	}
 
-	fileID := e.fileID
-	bf := bc.getFileState(fileID)
-	if bf == nil {
-		panic(bf)
-	}
-
-	//TODO
-	// assrt file crc32
-	//logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
-	return bf.read(e.valueOffset, e.valueSz)
+	return nil, ErrNotFound
 }
 
 // Del value by key
@@ -189,20 +199,23 @@ func (bc *BitCask) readableFiles() ([]*os.File, error) {
 	return fps, nil
 }
 
-func (bc *BitCask) getFileState(fileID uint32) *BFile {
+func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 	// lock up it from write able file
 	if fileID == bc.writeFile.fileID {
-		return bc.writeFile
+		return bc.writeFile, nil
 	}
 	// if not exits in write able file, look up it from ActiveFile
 	bf := bc.ActiveFile.get(fileID)
 	if bf != nil {
-		return bf
+		return bf, nil
 	}
 
-	bf = openBFile(bc.dirFile, int(fileID))
+	bf, err := openBFile(bc.dirFile, int(fileID))
+	if err != nil {
+		return nil, err
+	}
 	bc.ActiveFile.put(bf, fileID)
-	return bf
+	return bf, nil
 }
 
 func (bc *BitCask) parseHint(hintFps []*os.File) {
