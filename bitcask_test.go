@@ -103,12 +103,15 @@ func BenchmarkBitcaskCurrency(b *testing.B) {
 	storagePath := "benchMarkBitcask"
 	os.RemoveAll(storagePath)
 	opts := &Options{
-		MaxFileSize: 1 << 30,
+		MaxFileSize: 1 << 12,
 	}
 	bc, err := Open(storagePath, opts)
 	if err != nil {
 		logger.Fatal(err)
 	}
+
+	// mergeWorker := bitcask.NewMerge(bc, 5)
+	// mergeWorker.Start()
 
 	keyValues := make(map[int]string)
 
@@ -147,6 +150,7 @@ func BenchmarkBitcaskCurrency(b *testing.B) {
 			logger.Error(string(v), keyValues[i])
 		}
 	}
-	logger.Info("all data is not found")
+	logger.Info("all data is not found, pass test")
+	//mergeWorker.Staop()
 	bc.Close()
 }

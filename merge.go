@@ -1,20 +1,3 @@
-/*=============================================================================
-
- Copyright (C) 2016 All rights reserved.
-
- Author: Rg
-
- Email: daimaldd@gmail.com
-
- Last modified: 2016-01-22 18:10
-
- Filename: merge.go
-
- Description:
-
-=============================================================================*/
-
-//
 package bitcask
 
 import (
@@ -39,6 +22,12 @@ const (
 	StartComm = "start merge"
 )
 
+// MergeHintHeaderSize
+const (
+	// tStamp: ksz, valuesz:valueOffset:{key}
+	MergeHintHeaderSize = 20
+)
+
 func init() {
 	mergeOnce = &sync.Once{}
 }
@@ -46,15 +35,16 @@ func init() {
 // Merge for bitcask file merge
 type Merge struct {
 	bc               *BitCask
-	Rate             int64    // worker rate time for merging
-	mergeOffset      uint64   // the being merged data file fp offset
-	command          string   // merge command, not used now
-	mdFp             *os.File // being merged data file fp
-	mhFp             *os.File // being merged hint file fp
+	Rate             int64       // worker rate time for merging
+	mergeOffset      uint64      // the being merged data file fp offset
+	command          chan string // merge command, not used now
+	mdFp             *os.File    // being merged data file fp
+	mhFp             *os.File    // being merged hint file fp
 	firstFileID      uint32
 	mergedLists      *list.List // has been merged data/hint fileName list
 	newDataHintLists *list.List //
 	oldMergeSize     int        // previus merged list size
+	commnd           chan string
 }
 
 // NewMerge return a merge single obj
@@ -67,6 +57,7 @@ func NewMerge(bc *BitCask, rate int64) *Merge {
 				mergedLists:      list.New(),
 				newDataHintLists: list.New(),
 				oldMergeSize:     2, // if just one atctiveable and one writeable data/hint file, need not to merge
+				command:          make(chan string),
 			}
 		}
 		// clear all old merged file
@@ -80,10 +71,17 @@ func (m *Merge) Start() {
 	go m.work()
 }
 
+// Stop ...
+func (m *Merge) Stop() {
+	m.command <- StopComm
+}
 func (m *Merge) work() {
 	t := time.NewTimer(time.Second * time.Duration(m.Rate))
 	for {
 		select {
+		case com := <-m.command:
+			logger.Debug("received command:", com)
+			return
 		case <-t.C:
 			logger.Info("Start to merge file.")
 			t.Reset(time.Second * time.Duration(m.Rate))
@@ -384,9 +382,31 @@ func (m *Merge) updateHintFile(dFile, hFile string) error {
 		// put entry into keyDirs
 		//logger.Info("更新key/value in merge function", key, e.fileID)
 		//keyDirs.setCompare(key, e)
-		keyDirs.put(key, e)
+		//keyDirs.put(key, e)
+		keyDirs.setMerge(key, e, m.mergedListsToStr())
 	}
 	return nil
+}
+
+func (m *Merge) mergedListsToStr() []uint32 {
+	var mergedLists []uint32
+	for {
+		iterm := m.mergedLists.Front()
+		if iterm == nil {
+			break
+		}
+
+		nIterm := iterm.Next()
+		value, _ := iterm.Value.(struct {
+			df string
+			hf string
+		})
+		idx := strings.LastIndex(value.hf, ".hint")
+		fileID, _ := strconv.Atoi(value.hf[:idx])
+		mergedLists = append(mergedLists, uint32(fileID))
+		iterm = nIterm
+	}
+	return mergedLists
 }
 
 func (m *Merge) removeOldFiles() {
