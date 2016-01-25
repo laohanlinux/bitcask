@@ -32,11 +32,17 @@ func (e *entry) isNewerThan(old *entry) bool {
 	return false
 }
 
-// for merging
+// if all attr equal to old entry, return true
 func (e *entry) isNewerThan1(old *entry) bool {
 	if old.timeStamp < e.timeStamp {
 		return true
 	} else if old.timeStamp > e.timeStamp {
+		return false
+	}
+
+	if old.fileID < e.fileID {
+		return true
+	} else if old.fileID > e.fileID {
 		return false
 	}
 
@@ -45,5 +51,6 @@ func (e *entry) isNewerThan1(old *entry) bool {
 	} else if old.valueOffset > e.valueOffset {
 		return false
 	}
+
 	return true
 }

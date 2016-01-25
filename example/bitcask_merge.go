@@ -32,35 +32,36 @@ func main() {
 	mergeWorker := bitcask.NewMerge(bc, 5)
 	mergeWorker.Start()
 
-	size := (1 << 32)
+	size := (1 << 13)
 
 	var gGroup sync.WaitGroup
 
-	gGroup.Add(1)
-	go func() {
-		defer gGroup.Done()
-		for i := 0; i < size; i++ {
-			if i%1024 == 0 {
-				time.Sleep(time.Second * 1)
-			}
-			key := strconv.Itoa(i)
-			bc.Put([]byte(key), []byte(key))
+	///////////////////////////
+	for i := 0; i < size; i++ {
+		if i%1024 == 0 {
+			time.Sleep(time.Second * 1)
 		}
-	}()
-
+		key := strconv.Itoa(i)
+		bc.Put([]byte(key), []byte(key))
+	}
 	time.Sleep(time.Second * 1)
-	gGroup.Add(1)
-	go func() {
-		defer gGroup.Done()
-		for i := 0; i < size; i++ {
-			if i%2 == 0 {
-				key := strconv.Itoa(i)
-				value := strconv.Itoa(i + 1)
-				bc.Put([]byte(key), []byte(value))
-			}
+	for i := 0; i < size; i++ {
+		value_ := i
+		key := strconv.Itoa(i)
+		value, err := bc.Get([]byte(key))
+		if string(value) != strconv.Itoa(value_) {
+			logger.Error("value:", string(value), "value_:", strconv.Itoa(value_), err)
 		}
-	}()
+	}
+	//////////////////////////
 
+	for i := 0; i < size; i++ {
+		if i%2 == 0 {
+			key := strconv.Itoa(i)
+			value := strconv.Itoa(i + 1)
+			bc.Put([]byte(key), []byte(value))
+		}
+	}
 	time.Sleep(time.Second * 1)
 	gGroup.Add(1)
 	go func() {
@@ -79,7 +80,7 @@ func main() {
 
 		}
 	}()
-
+	////////////////////////////
 	gGroup.Wait()
 	logger.Info("pass all test")
 	time.Sleep(time.Second * 120)

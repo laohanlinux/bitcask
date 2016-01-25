@@ -36,6 +36,18 @@ func NewKeyDir(dirName string) *KeyDirs {
 	})
 	return keyDirs
 }
+func (keyDirs *KeyDirs) get(key string) *entry {
+	keyDirsLock.RLock()
+	defer keyDirsLock.RUnlock()
+	e, _ := keyDirs.entrys[key]
+	return e
+}
+
+func (keyDirs *KeyDirs) del(key string) {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+	delete(keyDirs.entrys, key)
+}
 
 // put a key with value into bitcask
 func (keyDirs *KeyDirs) put(key string, e *entry) {
@@ -59,6 +71,20 @@ func (keyDirs *KeyDirs) put(key string, e *entry) {
 		fmt.Printf("old:%d, %d\n", old.fileID, old.timeStamp)
 		//keyDirs.entrys[key] = old
 	*/
+}
+
+// put a key for merging operation
+func (keyDirs *KeyDirs) putMerge(key string, e *entry) {
+	keyDirsLock.Lock()
+	defer keyDirsLock.Unlock()
+	old, ok := keyDirs.entrys[key]
+	// if not exists, mybey in merging, someone delete it as time
+	if !ok {
+		return
+	}
+	if e.isNewerThan1(old) {
+		keyDirs.entrys[key] = e
+	}
 }
 
 func (keyDirs *KeyDirs) setCompare(key string, e *entry) {
@@ -101,19 +127,6 @@ func (keyDirs *KeyDirs) setMerge(key string, e *entry, mergeList []uint32) {
 	}
 
 	keyDirs.entrys[key] = e
-}
-
-func (keyDirs *KeyDirs) get(key string) *entry {
-	keyDirsLock.RLock()
-	defer keyDirsLock.RUnlock()
-	e, _ := keyDirs.entrys[key]
-	return e
-}
-
-func (keyDirs *KeyDirs) del(key string) {
-	keyDirsLock.Lock()
-	defer keyDirsLock.Unlock()
-	delete(keyDirs.entrys, key)
 }
 
 func (keyDirs *KeyDirs) updateFileID(oldID, newID uint32) {
