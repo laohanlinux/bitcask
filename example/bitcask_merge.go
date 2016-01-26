@@ -4,7 +4,6 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/laohanlinux/bitcask"
@@ -15,7 +14,7 @@ func main() {
 	storagePath := "exampleMergeDir"
 	os.RemoveAll(storagePath)
 	opts := &bitcask.Options{
-		MaxFileSize: 1 << 10,
+		MaxFileSize: 1 << 14,
 	}
 	bc, err := bitcask.Open(storagePath, opts)
 	if err != nil {
@@ -28,13 +27,12 @@ func main() {
 		}
 	}()
 	defer bc.Close()
-	logger.Info("start ================")
 	mergeWorker := bitcask.NewMerge(bc, 5)
 	mergeWorker.Start()
 
 	size := (1 << 13)
 
-	var gGroup sync.WaitGroup
+	//	var gGroup sync.WaitGroup
 
 	///////////////////////////
 	for i := 0; i < size; i++ {
@@ -46,11 +44,11 @@ func main() {
 	}
 	time.Sleep(time.Second * 1)
 	for i := 0; i < size; i++ {
-		value_ := i
+		tValue := i
 		key := strconv.Itoa(i)
 		value, err := bc.Get([]byte(key))
-		if string(value) != strconv.Itoa(value_) {
-			logger.Error("value:", string(value), "value_:", strconv.Itoa(value_), err)
+		if string(value) != strconv.Itoa(tValue) {
+			logger.Fatal("value:", string(value), "tValue:", strconv.Itoa(tValue), err)
 		}
 	}
 	//////////////////////////
@@ -63,25 +61,21 @@ func main() {
 		}
 	}
 	time.Sleep(time.Second * 1)
-	gGroup.Add(1)
-	go func() {
-		defer gGroup.Done()
-		for i := 0; i < size; i++ {
-			value_ := i
-			if i%2 == 0 {
-				value_ = i + 1
-			}
-			key := strconv.Itoa(i)
 
-			value, err := bc.Get([]byte(key))
-			if string(value) != strconv.Itoa(value_) {
-				logger.Error("value:", string(value), "value_:", strconv.Itoa(value_), err)
-			}
-
+	for i := 0; i < size; i++ {
+		tValue := i
+		if i%2 == 0 {
+			tValue = i + 1
 		}
-	}()
+		key := strconv.Itoa(i)
+		value, err := bc.Get([]byte(key))
+		if string(value) != strconv.Itoa(tValue) {
+			logger.Error("value:", string(value), "tValue:", strconv.Itoa(tValue), err)
+		}
+	}
+
 	////////////////////////////
-	gGroup.Wait()
+	//gGroup.Wait()
 	logger.Info("pass all test")
 	time.Sleep(time.Second * 120)
 }

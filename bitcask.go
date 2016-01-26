@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/laohanlinux/go-logger/logger"
 
@@ -34,7 +33,7 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 	}
 
 	if os.IsNotExist(err) {
-		err = os.Mkdir(dirName, 0777)
+		err = os.Mkdir(dirName, 0755)
 		if err != nil {
 			return nil, err
 		}
@@ -106,15 +105,11 @@ func (bc *BitCask) Close() {
 // Put key/value
 func (bc *BitCask) Put(key []byte, value []byte) error {
 	bc.rwLock.Lock()
-	defer bc.rwLock.Unlock()
-	if bc.writeFile == nil {
-		return fmt.Errorf("Can Not Read The Bitcask Root Director")
-	}
-
-	checkWriteableFile(bc)
+	defer checkWriteableFile(bc)
 	// write data into writeable file
 	e, err := bc.writeFile.writeDatat(key, value)
 	if err != nil {
+		bc.rwLock.Unlock()
 		return err
 	}
 	// add key/value into keydirs
@@ -122,32 +117,45 @@ func (bc *BitCask) Put(key []byte, value []byte) error {
 	return nil
 }
 
-// Get ...
-func (bc *BitCask) Get(key []byte) ([]byte, error) {
-	// bc.rwLock.RLock()
-	// defer bc.rwLock.RUnlock()
-
-	for {
-		e := keyDirs.get(string(key))
-		if e == nil {
-			return nil, ErrNotFound
-		}
-
-		fileID := e.fileID
-		bf, err := bc.getFileState(fileID)
-		if err != nil && os.IsNotExist(err) {
-			logger.Warn("key:", string(key), "=>the file is not exits:", fileID)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		//TODO
-		// assrt file crc32
-		//logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
-		return bf.read(e.valueOffset, e.valueSz)
+func (bc *BitCask) put1(key []byte, value []byte, e *entry) error {
+	bc.rwLock.Lock()
+	defer bc.rwLock.Unlock()
+	checkWriteableFile(bc)
+	if !keyDirs.setCompare(string(key), e) {
+		return fmt.Errorf("setComparse error")
 	}
 
-	return nil, ErrNotFound
+	bc.ActiveFile.delWithFileID(e.fileID)
+	e.fileID = bc.writeFile.fileID
+	// write data into writeable file
+	e1, err := bc.writeFile.writeDatat(key, value)
+	if err != nil {
+		return err
+	}
+	// add key/value into keydirs
+	keyDirs.put(string(key), &e1)
+	return nil
+}
+
+// Get ...
+func (bc *BitCask) Get(key []byte) ([]byte, error) {
+	e := keyDirs.get(string(key))
+	if e == nil {
+		return nil, ErrNotFound
+	}
+
+	fileID := e.fileID
+	bf, err := bc.getFileState(fileID)
+	if err != nil && os.IsNotExist(err) {
+		logger.Warn("key:", string(key), "=>the file is not exits:", fileID)
+		//time.Sleep(time.Second)
+		return nil, err
+	}
+
+	//TODO
+	// assrt file crc32
+	//logger.Info("fileID", fileID, "entry offset:", e.valueOffset, "\t entryLen:", e.valueSz)
+	return bf.read(e.valueOffset, e.valueSz)
 }
 
 // Del value by key
@@ -157,7 +165,6 @@ func (bc *BitCask) Del(key []byte) error {
 	if bc.writeFile == nil {
 		return fmt.Errorf("Can Not Read The Bitcask Root Director")
 	}
-
 	e := keyDirs.get(string(key))
 	if e == nil {
 		return ErrNotFound

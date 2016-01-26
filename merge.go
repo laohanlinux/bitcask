@@ -162,9 +162,9 @@ func (m *Merge) mergeDataFile(dFile string) error {
 			fileID:      uint32(fileID),
 			timeStamp:   tStamp,
 			valueOffset: valueOffset,
+			valueSz:     valuesz,
 		}
-		// call put operation
-		keyDirs.putMerge(string(keyValue[:ksz]), &e)
+		m.bc.put1(keyValue[:ksz], keyValue[ksz:], &e)
 	}
 	return nil
 }
@@ -191,11 +191,11 @@ func (m *Merge) removeOldFiles() error {
 		if err := os.Remove(m.bc.dirFile + "/" + value.df); err != nil {
 			return err
 		}
-		logger.Info("remove old datafile:", fileID, value.df)
+		logger.Debug("remove old datafile:", fileID, value.df)
 		if err := os.Remove(m.bc.dirFile + "/" + value.hf); err != nil {
 			return err
 		}
-		logger.Info("remove old hintfile:", fileID, value.hf)
+		logger.Debug("remove old hintfile:", fileID, value.hf)
 		m.mergedLists.Remove(iterm)
 		iterm.Value = nil
 		iterm = nIterm
