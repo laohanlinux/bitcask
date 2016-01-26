@@ -105,7 +105,8 @@ func (bc *BitCask) Close() {
 // Put key/value
 func (bc *BitCask) Put(key []byte, value []byte) error {
 	bc.rwLock.Lock()
-	defer checkWriteableFile(bc)
+	defer bc.rwLock.Unlock()
+	checkWriteableFile(bc)
 	// write data into writeable file
 	e, err := bc.writeFile.writeDatat(key, value)
 	if err != nil {
@@ -114,26 +115,6 @@ func (bc *BitCask) Put(key []byte, value []byte) error {
 	}
 	// add key/value into keydirs
 	keyDirs.put(string(key), &e)
-	return nil
-}
-
-func (bc *BitCask) put1(key []byte, value []byte, e *entry) error {
-	bc.rwLock.Lock()
-	defer bc.rwLock.Unlock()
-	checkWriteableFile(bc)
-	if !keyDirs.setCompare(string(key), e) {
-		return fmt.Errorf("setComparse error")
-	}
-
-	bc.ActiveFile.delWithFileID(e.fileID)
-	e.fileID = bc.writeFile.fileID
-	// write data into writeable file
-	e1, err := bc.writeFile.writeDatat(key, value)
-	if err != nil {
-		return err
-	}
-	// add key/value into keydirs
-	keyDirs.put(string(key), &e1)
 	return nil
 }
 
@@ -183,7 +164,7 @@ func (bc *BitCask) Del(key []byte) error {
 
 // return readable hint file: xxxx.hint
 func (bc *BitCask) readableFiles() ([]*os.File, error) {
-	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
+	filterFiles := []string{lockFileName}
 	ldfs, err := listHintFiles(bc)
 	if err != nil {
 		return nil, err

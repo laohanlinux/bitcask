@@ -4,7 +4,6 @@ const (
 	defaultExpirySecs    = 0
 	defaultMaxFileSize   = 1 << 31 // 2G
 	defaultTimeoutSecs   = 10
-	defaultMergeSecs     = 180
 	defaultValueMaxSize  = 1 << 20 // 1m
 	defaultCheckSumCrc32 = false
 )
@@ -35,16 +34,11 @@ func NewOptions(expirySecs int, maxFileSize uint64, openTimeoutSecs, mergeSecs i
 		openTimeoutSecs = defaultTimeoutSecs
 	}
 
-	if mergeSecs <= 0 {
-		mergeSecs = defaultMergeSecs
-	}
-
 	return Options{
 		ExpirySecs:      expirySecs,
 		OpenTimeoutSecs: openTimeoutSecs,
 		MaxFileSize:     maxFileSize,
 		ReadWrite:       readWrite,
-		MergeSecs:       mergeSecs,
 		CheckSumCrc32:   defaultCheckSumCrc32,
 		ValueMaxSize:    defaultValueMaxSize,
 	}

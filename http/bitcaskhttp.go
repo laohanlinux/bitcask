@@ -13,8 +13,6 @@ import (
 
 var addr string
 var storagePath string
-var merged bool
-var inteval int64
 var maxSize uint64
 var logLevel int
 
@@ -23,8 +21,6 @@ var bc *bitcask.BitCask
 func main() {
 	flag.StringVar(&addr, "addr", "127.0.0.1:80", "bitcask http listen addr")
 	flag.StringVar(&storagePath, "s", "bitcaskStorage", "data storage path")
-	flag.BoolVar(&merged, "m", false, "true: open file merge; false: not open file merge ")
-	flag.Int64Var(&inteval, "t", 3600, "inteval for file merging")
 	flag.Uint64Var(&maxSize, "ms", 1<<32, "single data file maxsize")
 	flag.IntVar(&logLevel, "l", 0, "logger level")
 	flag.Parse()
@@ -46,12 +42,6 @@ func main() {
 			debug.PrintStack()
 		}
 	}()
-
-	if merged {
-		mergeWorker := bitcask.NewMerge(bc, inteval)
-		mergeWorker.Start()
-		defer mergeWorker.Stop()
-	}
 
 	r := mux.NewRouter()
 	r.HandleFunc("/{key}", bitcaskGetHandle).Methods("GET")

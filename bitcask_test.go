@@ -110,9 +110,6 @@ func BenchmarkBitcaskCurrency(b *testing.B) {
 		logger.Fatal(err)
 	}
 
-	// mergeWorker := bitcask.NewMerge(bc, 5)
-	// mergeWorker.Start()
-
 	keyValues := make(map[int]string)
 
 	for i := 0; i < b.N/2; i++ {

@@ -11,74 +11,8 @@ import (
 )
 
 const (
-	lockFileName      = "bitcask.lock"
-	mergeBasePath     = "mergebase"
-	mergeDataSuffix   = "merge.data"
-	mergeHintSuffix   = "merge.hint"
-	mergingDataSuffix = mergeDataSuffix + ".tmp"
-	mergingHintSuffix = mergeHintSuffix + ".tmp"
+	lockFileName = "bitcask.lock"
 )
-
-func getMergingHintFile(bc *BitCask, baseTime int) string {
-	mergingHintFile := bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingHintSuffix
-
-	_, err := os.Stat(mergingHintFile)
-	if os.IsNotExist(err) {
-		return mergingHintFile
-	}
-	return bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingHintSuffix
-}
-
-func getMergingDataFile(bc *BitCask, baseTime int) string {
-	mergingDataFile := bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingDataSuffix
-
-	_, err := os.Stat(mergingDataFile)
-	if os.IsNotExist(err) {
-		return mergingDataFile
-	}
-	return bc.dirFile + "/" + strconv.Itoa(baseTime) + "." + mergingDataSuffix
-}
-
-// return the merge hint file, if no merge hint file, it will create a new uniquem merge hint file by Unix time stamp
-func getMergeHintFile(bc *BitCask) string {
-	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
-	if err != nil {
-		panic(err)
-	}
-	defer dirFp.Close()
-	fileLists, err := dirFp.Readdirnames(-1)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, file := range fileLists {
-		if strings.HasSuffix(file, mergeHintSuffix) {
-			return file
-		}
-	}
-	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeHintSuffix)
-}
-
-// return the merge hint file, if no merge data file, it will create a new unique merge data file by Unix time stamp
-func getMergeDataFile(bc *BitCask) string {
-	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, 0755)
-	if err != nil {
-		panic(err)
-	}
-	defer dirFp.Close()
-	fileLists, err := dirFp.Readdirnames(-1)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, file := range fileLists {
-		if strings.HasSuffix(file, mergeDataSuffix) {
-			return file
-		}
-	}
-
-	return bc.dirFile + "/" + uniqueFileName(bc.dirFile, mergeDataSuffix)
-}
 
 // if writeableFile size large than Opts.MaxFileSize and the fileID not equal to local time stamp;
 // if will create a new writeable file
@@ -105,7 +39,7 @@ func checkWriteableFile(bc *BitCask) {
 
 // return the hint file lists
 func listHintFiles(bc *BitCask) ([]string, error) {
-	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, lockFileName}
+	filterFiles := []string{lockFileName}
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
 	if err != nil {
 		return nil, err
@@ -128,7 +62,7 @@ func listHintFiles(bc *BitCask) ([]string, error) {
 
 // return the data file lists
 func listDataFiles(bc *BitCask) ([]string, error) {
-	filterFiles := []string{mergeDataSuffix, mergeHintSuffix, mergingDataSuffix, mergingHintSuffix, lockFileName}
+	filterFiles := []string{lockFileName}
 	dirFp, err := os.OpenFile(bc.dirFile, os.O_RDONLY, os.ModeDir)
 	if err != nil {
 		return nil, err
