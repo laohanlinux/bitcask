@@ -211,7 +211,7 @@ func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 	if fileID == bc.writeFile.fileID {
 		return bc.writeFile, nil
 	}
-	// if not exits in write able file, look up it from ActiveFile
+
 	bf := bc.ActiveFile.get(fileID)
 	if bf != nil {
 		return bf, nil
