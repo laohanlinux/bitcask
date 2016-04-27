@@ -9,8 +9,6 @@ import (
 	"sync"
 
 	"github.com/laohanlinux/go-logger/logger"
-
-	//	"github.com/laohanlinux/go-logger/logger"
 )
 
 // ErrNotFound ...
@@ -40,10 +38,10 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 	}
 
 	b := &BitCask{
-		Opts:       opts,
-		dirFile:    dirName,
-		ActiveFile: newBFiles(),
-		rwLock:     &sync.RWMutex{},
+		Opts:    opts,
+		dirFile: dirName,
+		OldFile: newBFiles(),
+		rwLock:  &sync.RWMutex{},
 	}
 	// lock file
 	b.lockFile, err = lockFile(dirName + "/" + lockFileName)
@@ -80,19 +78,19 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 
 // BitCask ...
 type BitCask struct {
-	Opts       *Options      // opts for bitcask
-	ActiveFile *BFiles       // hint file, data file
-	lockFile   *os.File      // lock file with process
-	keyDirs    *KeyDirs      // key/value hashMap, building with hint file
-	dirFile    string        // bitcask storage  root dir
-	writeFile  *BFile        // writeable file
-	rwLock     *sync.RWMutex // rwlocker for bitcask Get and put Operation
+	Opts      *Options      // opts for bitcask
+	OldFile   *BFiles       // hint file, data file
+	lockFile  *os.File      // lock file with process
+	keyDirs   *KeyDirs      // key/value hashMap, building with hint file
+	dirFile   string        // bitcask storage  root dir
+	writeFile *BFile        // writeable file
+	rwLock    *sync.RWMutex // rwlocker for bitcask Get and put Operation
 }
 
 // Close opening fp
 func (bc *BitCask) Close() {
 	// close ActiveFiles
-	bc.ActiveFile.close()
+	bc.OldFile.close()
 	// close writeable file
 	bc.writeFile.fp.Close()
 	bc.writeFile.hintFp.Close()
@@ -192,8 +190,8 @@ func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 	if fileID == bc.writeFile.fileID {
 		return bc.writeFile, nil
 	}
-	// if not exits in write able file, look up it from ActiveFile
-	bf := bc.ActiveFile.get(fileID)
+	// if not exits in write able file, look up it from OldFile
+	bf := bc.OldFile.get(fileID)
 	if bf != nil {
 		return bf, nil
 	}
@@ -202,7 +200,7 @@ func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	bc.ActiveFile.put(bf, fileID)
+	bc.OldFile.put(bf, fileID)
 	return bf, nil
 }
 
