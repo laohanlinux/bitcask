@@ -40,7 +40,7 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 	b := &BitCask{
 		Opts:    opts,
 		dirFile: dirName,
-		OldFile: newBFiles(),
+		oldFile: newBFiles(),
 		rwLock:  &sync.RWMutex{},
 	}
 	// lock file
@@ -79,7 +79,7 @@ func Open(dirName string, opts *Options) (*BitCask, error) {
 // BitCask ...
 type BitCask struct {
 	Opts      *Options      // opts for bitcask
-	OldFile   *BFiles       // hint file, data file
+	oldFile   *BFiles       // hint file, data file
 	lockFile  *os.File      // lock file with process
 	keyDirs   *KeyDirs      // key/value hashMap, building with hint file
 	dirFile   string        // bitcask storage  root dir
@@ -90,7 +90,7 @@ type BitCask struct {
 // Close opening fp
 func (bc *BitCask) Close() {
 	// close ActiveFiles
-	bc.OldFile.close()
+	bc.oldFile.close()
 	// close writeable file
 	bc.writeFile.fp.Close()
 	bc.writeFile.hintFp.Close()
@@ -191,7 +191,7 @@ func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 		return bc.writeFile, nil
 	}
 	// if not exits in write able file, look up it from OldFile
-	bf := bc.OldFile.get(fileID)
+	bf := bc.oldFile.get(fileID)
 	if bf != nil {
 		return bf, nil
 	}
@@ -200,7 +200,7 @@ func (bc *BitCask) getFileState(fileID uint32) (*BFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	bc.OldFile.put(bf, fileID)
+	bc.oldFile.put(bf, fileID)
 	return bf, nil
 }
 
